@@ -218,12 +218,11 @@ def get_frequencies(graphs: List[nx.DiGraph]) -> Dict[str, List[int]]:
 
 def main(verbose: bool = False):
     paths = [
-        pathlib.Path('/home/tainagdcoleman/pegasus-traces/cycles'),
-        pathlib.Path('/home/tainagdcoleman/pegasus-traces/1000genome'),
-        pathlib.Path('/home/tainagdcoleman/pegasus-traces/montage'),
-        pathlib.Path('/home/tainagdcoleman/pegasus-traces/soykb')
+        pathlib.Path('../pegasus-traces'), 
+        pathlib.Path('../makeflow-traces')
     ]
-    for workflow_path in paths:
+    dirs = [path for parentpath in paths for path in parentpath.glob("*") if path.is_dir()]
+    for workflow_path in dirs:
         if verbose:
             print(f"Working on {workflow_path}")
         graphs = []
@@ -232,6 +231,9 @@ def main(verbose: bool = False):
             annotate(graph)
             graph.graph["name"] = path.stem
             graphs.append(graph)
+        
+        if not graphs:
+            continue
         
         sorted_graphs = sorted(graphs, key=lambda graph: len(graph.nodes))
         g = sorted_graphs[0]  # smallest graph
@@ -291,4 +293,4 @@ def main(verbose: bool = False):
             )
 
 if __name__ == "__main__":
-    main()
+    main(verbose=False)
