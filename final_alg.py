@@ -9,7 +9,7 @@ import traceback
 from itertools import product
 import shutil
 from networkx.readwrite import read_gpickle, write_gpickle
-
+import numpy as np 
 
 this_dir = pathlib.Path(__file__).resolve().parent
 
@@ -271,15 +271,25 @@ def main(verbose: bool = False):
             queue.extend([child for child in children if child not in visited])
         
         sorted_microstructures = sorted(
-            [v for _, v in microstructures.items()], 
+            [
+                (dup_root_type, ms) for _, (dup_root_type, ms) 
+                in microstructures.items() if np.unique(freqs[dup_root_type]).size > 1 # 
+            ], 
             key=lambda x: len(x[1])
         )
         for i, (dup_root_type, duplicated) in enumerate(sorted_microstructures):
+            correlations = {}
+            for j, (key, _) in enumerate(sorted_microstructures):
+                if i == j:
+                    continue
+                correlations[f"microstructure_{j}"] = np.corrcoef(freqs[dup_root_type], freqs[key])[0,1]
+            
             mdata = {
                 "nodes": list(duplicated),
                 "size": len(duplicated),
                 "frequencies": freqs[dup_root_type],
-                "base_graph_path": str(base_graph_path.relative_to(savedir)) 
+                "base_graph_path": str(base_graph_path.relative_to(savedir)),
+                "correlations": correlations
             }
             with savedir.joinpath(f"microstructure_{i}.json").open("w+") as fp:
                 json.dump(mdata, fp, indent=2)
