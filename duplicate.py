@@ -37,16 +37,18 @@ def duplicate(microstructure: pathlib.Path, base_graph: pathlib.Path, nodes: int
     mdata = json.loads(microstructure.read_text())
     graph: nx.DiGraph = pickle.loads(base_graph.read_bytes())
 
+    i = 0
     while len(graph.nodes) < nodes:
-        duplicate_nodes(graph, random.choice(mdata[0]["nodes"]))
+        duplicate_nodes(graph, random.choice(mdata[i % len(mdata)]["nodes"]))
+        i += 1
 
     return graph
 
 
 def main():
 
-    path = this_dir.joinpath("microstructures", "cycles")
-    graph = duplicate(path.joinpath("microstructures.json"), path.joinpath("base_graph.pickle"), 100)
+    path = this_dir.joinpath("microstructures", "1000genome")
+    graph = duplicate(path.joinpath("microstructures.json"), path.joinpath("base_graph.pickle"), 200)
     
     duplicated = {node for node in graph.nodes if "duplicate_of" in graph.nodes[node]}
     draw(graph, save=this_dir.joinpath("duplicated.png"), close=True, subgraph=duplicated)

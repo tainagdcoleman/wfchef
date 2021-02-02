@@ -301,7 +301,7 @@ def main(verbose: bool = False):
             mdatas.append(mdata)    
             draw(
                 g, 
-                subgraph=duplicated,
+                subgraph=duplicated[0],
                 with_labels=False, 
                 save=str(savedir.joinpath(f"microstructure_{i}.png")), 
                 close=True
