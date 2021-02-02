@@ -271,7 +271,7 @@ def main(verbose: bool = False):
                 microstructures.setdefault(dup_hash, (dup_size, _g.nodes[dup_root]["type"], []))
                 microstructures[dup_hash][2].append(list(duplicated)) 
         
-            queue.extend([child for child in children if child not in visited])
+            queue.extend(children) 
         
         sorted_microstructures = sorted(
             [
