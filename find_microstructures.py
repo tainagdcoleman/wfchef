@@ -124,7 +124,7 @@ def _find_microstructure(graph: nx.DiGraph, cur1: str, cur2: str, new_nodes: Dic
         return new_nodes[cur1], {new_nodes[cur1]}
 
     new_id = uuid4()
-    new_node = f"{cur1}_{uuid4()}"
+    new_node = f"{cur1}_{new_id}"
     graph.add_node(
         new_node,
         id=new_id, 
@@ -266,34 +266,39 @@ def main(verbose: bool = False):
                 _g = g.copy()
                 dup_root, _, new_nodes = find_microstructure(_g, s1, s2)
                 duplicated = {old_node for old_node, new_node in new_nodes.items()}
-                microstructures[_g.nodes[dup_root]["type_hash"]] = (_g.nodes[dup_root]["type"], duplicated) 
+                dup_hash = combine_hashes(*[_g.nodes[n]["type_hash"] for n in duplicated])
+                dup_size = len(duplicated)
+                microstructures.setdefault(dup_hash, (dup_size, _g.nodes[dup_root]["type"], []))
+                microstructures[dup_hash][2].append(list(duplicated)) 
         
             queue.extend([child for child in children if child not in visited])
         
         sorted_microstructures = sorted(
             [
-                (dup_root_type, ms) for _, (dup_root_type, ms) 
+                (dup_size, dup_root_type, ms) for _, (dup_size, dup_root_type, ms) 
                 in microstructures.items() if np.unique(freqs[dup_root_type]).size > 1 # 
             ], 
-            key=lambda x: len(x[1])
+            key=lambda x: x[0]
         )
-        for i, (dup_root_type, duplicated) in enumerate(sorted_microstructures):
+
+        mdatas = []
+        for i, (dup_size, dup_root_type, duplicated) in enumerate(sorted_microstructures):
             correlations = {}
-            for j, (key, _) in enumerate(sorted_microstructures):
+            for j, (_, key, _) in enumerate(sorted_microstructures):
                 if i == j:
                     continue
                 correlations[f"microstructure_{j}"] = np.corrcoef(freqs[dup_root_type], freqs[key])[0,1]
             
             mdata = {
+                "name": f"microstructure_{i}",
                 "nodes": list(duplicated),
-                "size": len(duplicated),
+                "size": dup_size,
                 "frequencies": freqs[dup_root_type],
                 "base_graph_path": str(base_graph_path.relative_to(savedir)),
                 "correlations": correlations
             }
-            with savedir.joinpath(f"microstructure_{i}.json").open("w+") as fp:
-                json.dump(mdata, fp, indent=2)
 
+            mdatas.append(mdata)    
             draw(
                 g, 
                 subgraph=duplicated,
@@ -301,6 +306,10 @@ def main(verbose: bool = False):
                 save=str(savedir.joinpath(f"microstructure_{i}.png")), 
                 close=True
             )
+
+            
+        with savedir.joinpath(f"microstructures.json").open("w+") as fp:
+            json.dump(mdatas, fp, indent=2)
 
 if __name__ == "__main__":
     main(verbose=False)
