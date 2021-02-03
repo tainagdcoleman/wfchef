@@ -174,7 +174,7 @@ def draw(g: nx.DiGraph,
         fig = ax.get_figure()
 
     pos = nx.nx_agraph.pygraphviz_layout(g, prog='dot')
-    type_set = {g.nodes[node]["type"] for node in g.nodes}
+    type_set = sorted({g.nodes[node]["type"] for node in g.nodes})
     types = {
         t: i for i, t in enumerate(type_set)
     }
