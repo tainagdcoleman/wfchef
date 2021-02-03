@@ -317,7 +317,6 @@ def main(verbose: bool = False):
 
                 inter = type_hashes[ms["name"]].intersection(type_hashes[_ms["name"]])
                 if inter not in (set(), type_hashes[ms["name"]], type_hashes[_ms["name"]]):
-                    print(ms["name"], "IS NOT SIMPLE")
                     ms["simple"] = False
             
         with savedir.joinpath(f"microstructures.json").open("w+") as fp:
