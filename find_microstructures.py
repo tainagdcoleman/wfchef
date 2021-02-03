@@ -307,6 +307,18 @@ def main(verbose: bool = False):
                 close=True
             )
 
+        type_hashes = {
+            ms["name"]: {g.nodes[node]["type_hash"] for node in ms["nodes"][0]}
+            for ms in mdatas
+        }
+        for ms in mdatas:
+            ms["simple"] = True
+            for _ms in mdatas:
+
+                inter = type_hashes[ms["name"]].intersection(type_hashes[_ms["name"]])
+                if inter not in (set(), type_hashes[ms["name"]], type_hashes[_ms["name"]]):
+                    print(ms["name"], "IS NOT SIMPLE")
+                    ms["simple"] = False
             
         with savedir.joinpath(f"microstructures.json").open("w+") as fp:
             json.dump(mdatas, fp, indent=2)
