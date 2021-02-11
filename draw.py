@@ -97,7 +97,7 @@ def draw(g: nx.DiGraph,
 def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('src')
-    parser.add_argument('dst')
+    parser.add_argument('savedir')
 
     return parser
 
@@ -106,10 +106,10 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
     args.src = pathlib.Path(args.src)
-    args.dst = pathlib.Path(args.dst)
+    args.savedir = pathlib.Path(args.savedir)
     graph = create_graph(args.src)
 
-    draw(graph, show=True, save=args.dst)
+    draw(graph, show=True, save=args.savedir)
 
 if __name__ == "__main__":
     main()
