@@ -8,16 +8,25 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Set
 
 from workflowhub.generator.workflow.abstract_recipe import WorkflowRecipe
 from workflowhub.common.file import FileLink
 from workflowhub.common.task import Task
 from workflowhub.common.workflow import Workflow
 
-from itertools import product
+from wfchef.duplicate import duplicate_nodes
 
-structure = {}
+from itertools import product
+import pathlib 
+import pickle
+import networkx as nx
+import random
+import json
+from uuid import uuid4
+
+this_dir = pathlib.Path(__file__).resolve().parent
+
 
 class SkeletonRecipe(WorkflowRecipe):
     """A Skeleton workflow recipe class for creating synthetic workflow traces.
@@ -41,6 +50,13 @@ class SkeletonRecipe(WorkflowRecipe):
         self.tasks = {}
         self.variables = kwargs
 
+        self.graph = self._load_base_graph()
+        self.microstructures = self._load_microstructures()
+        self.node_types = [
+            self.graph.nodes[node]["type"]
+            for node in self.graph.nodes
+        ]
+
     @classmethod
     def from_num_tasks(cls, num_tasks: int) -> 'SkeletonRecipe':
         """
@@ -54,63 +70,20 @@ class SkeletonRecipe(WorkflowRecipe):
                  to the total number of tasks provided.
         :rtype: SkeletonRecipe
         """
-        return cls(num_tasks=num_tasks)
+        microstructures = json.loads(this_dir.joinpath("microstructures.json").read_text())
+        n = len([m for m in microstructures if m["simple"]])
+        kwargs = {
+            microstructure["name"]: (num_tasks // n) // microstructure["size"]
+            for microstructure in microstructures
+            if microstructure["simple"]
+        }
+        return cls(**kwargs)
 
-    def _add_nodes(self, 
-                   node_type: str, 
-                   node_id: Union[str, int], 
-                   duplicity: Union[str, int],
-                   tasks: Dict[str, str],
-                   workflow: Workflow) -> List[str]:
-        
-        if (node_type, node_id) in tasks:
-            return tasks[(node_type, node_id)]
+    def _load_base_graph(self) -> nx.DiGraph:
+        return pickle.loads(this_dir.joinpath("base_graph.pickle").read_bytes())
 
-        num_nodes = duplicity if isinstance(duplicity, int) else self.variables[duplicity]
-
-        task_names = []
-        for _ in range(num_nodes):
-            task_name = self._generate_task_name(node_type)
-            task_names.append(task_name)
-            task = self._generate_task(node_type, task_name)
-            workflow.add_node(task_name, task=task)
-
-        tasks[(node_type, node_id)] = task_names
-        return task_names
-
-    def _add_component(self, component_name: str, workflow: Workflow) -> List[str]:
-        edges = structure['components'][component_name]
-
-        tasks={}
-        dsts = set()
-        srcs = set()
-        for src, dst in edges:
-            if src[0] in structure["node_types"]:
-                src_ids = self._add_nodes(*src, tasks, workflow)
-            else:
-                duplicity = src[2] if isinstance(src[2], int) else self.variables[src[2]]
-                src_ids = [
-                    _id
-                    for i in range(duplicity)
-                    for _id in self._add_component(src[0], workflow)
-                ]
-
-            if dst[0] in structure["node_types"]:
-                dst_ids = self._add_nodes(*dst, tasks, workflow)
-            else:
-                duplicity = dst[2] if isinstance(dst[2], int) else self.variables[dst[2]]
-                dst_ids = [
-                    _id
-                    for i in range(duplicity)
-                    for _id in self._add_component(dst[0], workflow)
-                ]
-
-            dsts.update(dst_ids)
-            srcs.update(src_ids)
-            for src_id, dst_id in product(src_ids, dst_ids):
-                workflow.add_edge(src_id, dst_id)
-
-        return list(dsts - srcs)
+    def _load_microstructures(self) -> Dict:
+        return json.loads(this_dir.joinpath("microstructures.json").read_text())
 
     def build_workflow(self, workflow_name: Optional[str] = None) -> Workflow:
         """Generate a synthetic workflow trace of a Skeleton workflow.
@@ -122,10 +95,27 @@ class SkeletonRecipe(WorkflowRecipe):
         :rtype: Workflow
         """
         workflow = Workflow(name=self.name + "-synthetic-trace" if not workflow_name else workflow_name, makespan=None)
+        graph = self.graph.copy()
 
-        self._add_component(structure['root'], workflow)
-        
+        # Duplicate
+        for microstructure in self.microstructures: 
+            duplicity = self.variables[microstructure["name"]]
+            for _ in range(duplicity):
+                duplicate_nodes(graph, random.choice(microstructure["nodes"]))
 
+        task_names = {}
+        for node in graph.nodes:
+            node_type = graph.nodes[node]["type"]
+            task_name = self._generate_task_name(node_type)
+            task = self._generate_task(node_type, task_name)
+            workflow.add_node(task_name, task=task)
+
+            task_names[node] = task_name
+
+        for (src, dst) in graph.edges:
+            workflow.add_edge(task_names[src], task_names[dst])        
+
+        workflow.nxgraph = graph
         self.workflows.append(workflow)
         return workflow
 
@@ -181,5 +171,5 @@ class SkeletonRecipe(WorkflowRecipe):
         }
         return {
             node_type: default
-            for node_type in structure["node_types"]
+            for node_type in self.node_types
         }

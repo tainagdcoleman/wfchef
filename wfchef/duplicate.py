@@ -4,7 +4,7 @@ import pickle
 import networkx as nx
 from typing import Set
 from uuid import uuid4
-from find_microstructures import draw
+from .find_microstructures import draw
 import random
 import argparse
 
