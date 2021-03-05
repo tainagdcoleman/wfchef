@@ -24,6 +24,7 @@ import networkx as nx
 import random
 import json
 from uuid import uuid4
+import pandas as pd
 
 this_dir = pathlib.Path(__file__).resolve().parent
 
@@ -41,12 +42,12 @@ class SkeletonRecipe(WorkflowRecipe):
 
     def __init__(self,
                  data_footprint: Optional[int] = 0,
-                 num_tasks: Optional[int] = 3
-                 ) -> None:
+                 num_tasks: Optional[int] = 3,
+                 **kwargs) -> None:
         super().__init__("Skeleton", data_footprint, num_tasks)
-        self._init_()
+        self._initialize(**kwargs)
 
-    def _init_(self, **kwargs) -> None:
+    def _initialize(self, **kwargs) -> None:
         self.tasks = {}
         self.variables = kwargs
 
@@ -70,13 +71,18 @@ class SkeletonRecipe(WorkflowRecipe):
                  to the total number of tasks provided.
         :rtype: SkeletonRecipe
         """
-        microstructures = json.loads(this_dir.joinpath("microstructures.json").read_text())
-        n = len([m for m in microstructures if m["simple"]])
-        kwargs = {
-            microstructure["name"]: (num_tasks // n) // microstructure["size"]
-            for microstructure in microstructures
-            if microstructure["simple"]
-        }
+        microstructures = json.loads(this_dir.joinpath("microstructures.json").read_text())        
+        kwargs = {}
+        for ms in microstructures:
+            if not ms["simple"]: 
+                continue
+
+            freqs = {int(k): int(v) for k, v in ms["frequencies"].items()}
+            if not num_tasks in freqs:
+                freqs[num_tasks] = None 
+
+            kwargs[ms["name"]] = round(pd.Series(freqs).sort_index().interpolate()[num_tasks])
+
         return cls(**kwargs)
 
     def _load_base_graph(self) -> nx.DiGraph:

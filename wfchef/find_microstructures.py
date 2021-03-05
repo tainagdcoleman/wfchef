@@ -7,320 +7,187 @@ import os
 import json
 import traceback
 from itertools import product
-import shutil
 from networkx.readwrite import read_gpickle, write_gpickle
 import numpy as np 
-
-this_dir = pathlib.Path(__file__).resolve().parent
-
-def create_graph(path: pathlib.Path) -> nx.DiGraph:
-    with path.open() as fp:
-        content = json.load(fp)
-
-        graph = nx.DiGraph()
-
-        # Add src/dst nodes
-        graph.add_node("SRC", label="SRC", type="SRC", id="SRC")
-        graph.add_node("DST", label="DST", type="DST", id="DST")
-
-        id_count = 0
-        for job in content['workflow']['jobs']:
-            #specific for epigenomics -- have to think about how to do it in general
-            if content['name'] == "genome-dax-0":
-                if '_sequence' in job['name']:
-                    _type, _id = job['name'].split('_sequence')
-                    _id = _id.lstrip('_')
-                    if not _id:
-                        _id = str(id_count)
-                        id_count += 1
-                else:
-                    _type, _id = job['name'], str(id_count)
-                    id_count += 1
-
-                graph.add_node(job['name'], label=_type, type=_type, id=_id)
-                    
-            else:
-                _type, _id = job['name'].split('_ID')
-                graph.add_node(job['name'], label=_type, type=_type, id=_id)
-     
-        # for job in content['workflow']['jobs']:
-            for parent in job['parents']:
-                graph.add_edge(parent, job['name'])
-
-        for node in graph.nodes:
-            
-            if node in ["SRC", "DST"]:
-                continue
-            if graph.in_degree(node) <= 0:
-                
-                graph.add_edge("SRC", node)
-            if graph.out_degree(node) <= 0:
-                graph.add_edge(node, "DST")
-        
-        return graph
-
-def string_hash(obj: Hashable) -> str:
-    return sha256(str(obj).encode("utf-8")).hexdigest()
-
-def type_hash(_type: str, parent_types: Iterable[str]) -> str:
-    return string_hash((_type, sorted(set(parent_types))))
-
-def combine_hashes(*hashes: str) -> str:
-    return string_hash(sorted(hashes))
+from itertools import chain, combinations
+import argparse
+from .draw import draw
+from .utils import create_graph, string_hash, type_hash, combine_hashes, annotate
 
 
-def annotate(g: nx.DiGraph) -> None:
-    visited = set()
-    queue = [(node, 1) for node in g.nodes if g.in_degree(node) <= 0]
-    while queue:
-        cur, level = queue.pop(0)
-        g.nodes[cur]["level"] = level
-        g.nodes[cur]["label"] = g.nodes[cur]["id"]
-        parent_ths = [
-            g.nodes[p]["type_hash"]
-            for p, _ in g.in_edges(cur)
-        ]
-        g.nodes[cur]["type_hash"] = type_hash(g.nodes[cur]["type"], parent_ths)
-
-        visited.add(cur)
-        queue.extend([
-            (child, level + 1) for _, child in g.out_edges(cur)
-            if child not in visited and 
-            {sib for sib, _ in g.in_edges(child)}.issubset(visited)
-        ])
-
-    # REVERSE 
-    visited = set()
-    queue = [node for node in g.nodes if g.out_degree(node) <= 0]
-    while queue:
-        cur = queue.pop(0)
-        parent_ths = [
-            g.nodes[p]["r_type_hash"]
-            for _, p in g.out_edges(cur)
-        ]
-        g.nodes[cur]["r_type_hash"] = type_hash(g.nodes[cur]["type"], parent_ths)
-        g.nodes[cur]["combined_type_hash"] = combine_hashes(g.nodes[cur]["type_hash"], g.nodes[cur]["r_type_hash"])
-
-        visited.add(cur)
-        queue.extend([
-            child for child, _ in g.in_edges(cur)
-            if child not in visited and 
-            {sib for _, sib in g.out_edges(child)}.issubset(visited)
-        ])
-    
-
-def find_microstructure(graph: nx.DiGraph, node: str, sibling: str):
-    new_nodes = {}
-    dup_root, added = _find_microstructure(graph, node, sibling, new_nodes)
-    added.update({par for par, _ in graph.in_edges(node)})
-    for parent, _ in graph.in_edges(node):
-        graph.add_edge(parent, dup_root)
-    return dup_root, added, new_nodes
-
-def _find_microstructure(graph: nx.DiGraph, cur1: str, cur2: str, new_nodes: Dict[str, str]) -> Tuple[str, Set[str]]:
-    if cur1 == cur2:
-        return cur1, {cur1}
-    elif cur1 in new_nodes:
-        return new_nodes[cur1], {new_nodes[cur1]}
-
-    new_id = uuid4()
-    new_node = f"{cur1}_{new_id}"
-    graph.add_node(
-        new_node,
-        id=new_id, 
-        type=graph.nodes[cur1]["type"],
-        type_hash=graph.nodes[cur1]["type_hash"], 
-        r_type_hash=graph.nodes[cur1]["r_type_hash"],
-        combined_type_hash=graph.nodes[cur1]["combined_type_hash"],
-        level=graph.nodes[cur1]["level"],
-        duplicate_of=cur1
-    )
-    new_nodes[cur1] = new_node
-
-    childs1 = sorted(
-        [child for _, child in graph.out_edges(cur1)], 
-        key=lambda node: graph.nodes[node]["combined_type_hash"]
-    )
-    childs2 = sorted(
-        [child for _, child in graph.out_edges(cur2)], 
-        key=lambda node: graph.nodes[node]["combined_type_hash"]
-    )
-
-    added = {new_node}
+def find_microstructure(graph: nx.DiGraph, node: str, sibling: str, ms = None):
+    if ms is None:
+        ms = set()
+    if node == sibling: 
+        return ms
+    ms.add(node)
+    key = lambda node: graph.nodes[node]["type_hash"]
+    childs1 = sorted([child for _, child in graph.out_edges(node)], key=key)
+    childs2 = sorted([child for _, child in graph.out_edges(sibling)], key=key)
     for child1, child2 in zip(childs1, childs2):
-        _new_child, _new_added = _find_microstructure(graph, child1, child2, new_nodes)
-        graph.add_edge(new_node, _new_child)
-        added.update(_new_added)
+        ms.update(find_microstructure(graph, child1, child2, ms))
+    return ms
 
-    return new_node, added
-
-
-import matplotlib.pyplot as plt
-from matplotlib import cm
-import matplotlib.patches as mpatches
-
-def draw(g: nx.DiGraph, 
-         with_labels: bool = False, 
-         ax: Optional[plt.Axes] = None,
-         show: bool = False,
-         save: Optional[Union[pathlib.Path, str]] = None,
-         close: bool = False,
-         subgraph: Set[str] = set()) -> Tuple[plt.Figure, plt.Axes]:
-    fig: plt.Figure
-    ax: plt.Axes
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(12, 10))
-    else:
-        fig = ax.get_figure()
-
-    pos = nx.nx_agraph.pygraphviz_layout(g, prog='dot')
-    type_set = sorted({g.nodes[node]["type"] for node in g.nodes})
-    types = {
-        t: i for i, t in enumerate(type_set)
-    }
-    node_color = [types[g.nodes[node]["type"]] for node in g.nodes]
-    for node in g.nodes:
-        if node in subgraph:
-            g.nodes[node]["node_shape"] = "s"
-        else:
-            g.nodes[node]["node_shape"] = "c"
-    edgecolors = [("green" if node in subgraph else "white") for node in g.nodes]
-    edge_color = [
-        "green" if src in subgraph and dst in subgraph else "black"
-        for src, dst in g.edges
-    ]
-    cmap = cm.get_cmap('rainbow', len(type_set))
-    nx.draw(g, pos, node_color=node_color, edgecolors=edgecolors, edge_color=edge_color, linewidths=3, cmap=cmap, ax=ax, with_labels=with_labels)
-    color_lines = [mpatches.Patch(color=cmap(types[t]), label= t) for t in type_set]
-    legend = ax.legend(handles = color_lines , loc='lower right')
-
-    # for handle in legend.legendHandles:
-    #     handle.set_color(cmap(types[t]))
-
-    if show:
-        plt.show()
-
-    if save is not None:
-        fig.savefig(str(save))
-
-    if close:
-        plt.close(fig)
-
-    return fig, ax
-
-def get_frequencies(graphs: List[nx.DiGraph]) -> Dict[str, List[int]]:
+def get_frequencies(graphs: List[nx.DiGraph]) -> Tuple[Dict[str, List[int]], Dict[int, int]]:
     types = {}
+    size = {}
     for i, graph in enumerate(graphs):
+        size[i] = graph.order()
         for node in graph.nodes:
             types.setdefault(graph.nodes[node]["type"], [0]*len(graphs))
             types[graph.nodes[node]["type"]][i] += 1
-    return types
+    return types, size
 
-def main(verbose: bool = False):
-    paths = [
-        pathlib.Path('../pegasus-traces'), 
-        pathlib.Path('../makeflow-traces')
-    ]
-    dirs = [path for parentpath in paths for path in parentpath.glob("*") if path.is_dir()]
-    for workflow_path in dirs:
-        if verbose:
-            print(f"Working on {workflow_path}")
-        graphs = []
-        for path in workflow_path.glob("*/*.json"):
-            graph = create_graph(path)
-            annotate(graph)
-            graph.graph["name"] = path.stem
-            graphs.append(graph)
-        
-        if not graphs:
-            continue
-        
-        sorted_graphs = sorted(graphs, key=lambda graph: len(graph.nodes))
-        g = sorted_graphs[0]  # smallest graph
-        freqs = get_frequencies(sorted_graphs)
+def find_microstructures(workflow_path: Union[pathlib.Path], savedir: pathlib.Path, verbose: bool = False, do_combine: bool = False):
+    if verbose:
+        print(f"Working on {workflow_path}")
+    graphs = []
+    for path in workflow_path.glob("*.json"):
+        graph = create_graph(path)
+        annotate(graph)
+        graph.graph["name"] = path.stem
+        graphs.append(graph)
     
-        savedir = this_dir.joinpath("microstructures", workflow_path.stem)  
-        if savedir.exists():
-            shutil.rmtree(savedir)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
-        savedir.mkdir(exist_ok=True, parents=True)
+    if not graphs:
+        raise ValueError(f"No graphs found in {workflow_path}")
 
-        # Save smallest graph to disk for loading later
-        base_graph_path = savedir.joinpath("base_graph.pickle")
-        write_gpickle(g, str(base_graph_path))
+    if verbose:
+        print("Constructed graphs")
+    
+    sorted_graphs = sorted(graphs, key=lambda graph: len(graph.nodes))
+    g = sorted_graphs[0]  # smallest graph
+    freqs, sizes = get_frequencies(sorted_graphs)
+    get_freqs = lambda root_types: np.min([freqs[root_type] for root_type in root_types], axis=0).tolist()
+    nx.set_node_attributes(g, {node: set() for node in g.nodes}, name="microstructures")
 
-        draw(g, with_labels=False, save=str(savedir.joinpath("base_graph.png")))
+    savedir = pathlib.Path(savedir)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+    savedir.mkdir(exist_ok=True, parents=True)
 
-        visited = set()
-        queue = ["SRC"]
-        microstructures = {}
-        while queue:
-            node = queue.pop()
-            visited.add(node)
-            children = [child for _, child in g.out_edges(node)]
-            for s1, s2 in product(children, children):
-                if s1 == s2 or g.nodes[s1]["type_hash"] != g.nodes[s2]["type_hash"]: 
-                    continue 
+    # Save smallest graph to disk for loading later
+    base_graph_path = savedir.joinpath("base_graph.pickle")
+    write_gpickle(g, str(base_graph_path))
 
-                if verbose:
-                    print(f"RUNNING {s1}/{s2}")
-                _g = g.copy()
-                dup_root, _, new_nodes = find_microstructure(_g, s1, s2)
-                duplicated = {old_node for old_node, new_node in new_nodes.items()}
-                dup_hash = combine_hashes(*[_g.nodes[n]["type_hash"] for n in duplicated])
-                dup_size = len(duplicated)
-                microstructures.setdefault(dup_hash, (dup_size, _g.nodes[dup_root]["type"], []))
-                microstructures[dup_hash][2].append(list(duplicated)) 
+    if verbose:
+        print("Drawing base graph")
+    draw(g, with_labels=False, save=str(savedir.joinpath("base_graph.png")))
+
+    if verbose:
+        print("Finding microstructures")
+    visited = set()
+    queue = ["SRC"]
+    microstructures = {}
+    while queue:
+        node = queue.pop()
+        visited.add(node)
+        children = [child for _, child in g.out_edges(node)]
+        for s1, s2 in combinations(children, r=2):
+            if s1 == s2 or g.nodes[s1]["type_hash"] != g.nodes[s2]["type_hash"]: 
+                continue 
+
+            if verbose:
+                print(f"RUNNING {s1}/{s2}")
+            _g = g.copy()
+            duplicated = find_microstructure(_g, s1, s2)
+            ms_hash = combine_hashes(*[_g.nodes[n]["type_hash"] for n in duplicated])
+            for node in duplicated:
+                g.nodes[node]["microstructures"].add(ms_hash)
+            ms_size = len(duplicated)
+            microstructures.setdefault(ms_hash, (ms_size, _g.nodes[s1]["type"], []))
+            microstructures[ms_hash][2].append(set(duplicated)) 
+    
+        queue.extend(children) 
+
+    if do_combine:
+        merged = {}
+        for ms_hash, (ms_size, root_type, node_sets) in microstructures.items():
+            idxs = []
+            for merged_hash, (_, _, _node_sets) in merged.items():
+                ms_nodes = frozenset(chain(*node_sets))
+                _ms_nodes = frozenset(chain(*_node_sets))
+
+                if ms_nodes.intersection(_ms_nodes) not in [set(), ms_nodes, _ms_nodes]:
+                    idxs.append(merged_hash) # at least one node in common
+            
+            if not idxs:
+                merged[ms_hash] = (ms_size, {root_type}, node_sets)
+            else:
+                new_nodes = []
+                for all_nodes in product(node_sets, *[merged[merged_hash][2] for merged_hash in idxs]): # product between all 
+                    if all([len(n1.intersection(n2)) > 0 for n1, n2 in combinations(all_nodes, r=2)]):
+                        new_nodes.append(set.union(*all_nodes))
+
+                root_types = {root_type, *chain(*[merged[merged_hash][1] for merged_hash in idxs])}
+                merged[combine_hashes(ms_hash, merged_hash)] = (len(new_nodes[0]), root_types, new_nodes)
+                for merged_hash in idxs:
+                    del merged[merged_hash]
+    else:
+        merged = {ms_hash: (ms_size, {root_type}, node_sets) for ms_hash, (ms_size, root_type, node_sets) in microstructures.items()}
+    
+    sorted_microstructures = sorted(
+        [
+            (ms_size, ms_root_types, ms) for _, (ms_size, ms_root_types, ms) 
+            in merged.items() 
+            if np.unique(get_freqs(ms_root_types)).size > 1 or len(get_freqs(ms_root_types)) == 1 # remove microstructures with no duplication
+        ], 
+        key=lambda x: x[0]
+    )
+
+    mdatas = []
+    for i, (ms_size, ms_root_types, duplicated) in enumerate(sorted_microstructures):
+        correlations = {}
         
-            queue.extend(children) 
+        for j, (_, key, _) in enumerate(sorted_microstructures):
+            if i == j:
+                continue
+            correlations[f"microstructure_{j}"] = np.corrcoef(get_freqs(ms_root_types), get_freqs(key))[0,1]
         
-        sorted_microstructures = sorted(
-            [
-                (dup_size, dup_root_type, ms) for _, (dup_size, dup_root_type, ms) 
-                in microstructures.items() if np.unique(freqs[dup_root_type]).size > 1 # 
-            ], 
-            key=lambda x: x[0]
+        mdata = {
+            "name": f"microstructure_{i}",
+            "nodes": list(map(list, duplicated)),
+            "size": ms_size,
+            "frequencies": dict(zip(sizes.values(), get_freqs(ms_root_types))),
+            "base_graph_path": str(base_graph_path.relative_to(savedir)),
+            "correlations": correlations
+        }
+
+        mdatas.append(mdata)   
+        draw(
+            g, 
+            subgraph=duplicated[0],
+            with_labels=False, 
+            save=str(savedir.joinpath(f"microstructure_{i}.png")), 
+            close=True
         )
 
-        mdatas = []
-        for i, (dup_size, dup_root_type, duplicated) in enumerate(sorted_microstructures):
-            correlations = {}
-            for j, (_, key, _) in enumerate(sorted_microstructures):
-                if i == j:
-                    continue
-                correlations[f"microstructure_{j}"] = np.corrcoef(freqs[dup_root_type], freqs[key])[0,1]
+    type_hashes = {
+        ms["name"]: {g.nodes[node]["type_hash"] for node in ms["nodes"][0]}
+        for ms in mdatas
+    }
+    for ms in mdatas:
+        ms["simple"] = True
+        for _ms in mdatas:
+
+            inter = type_hashes[ms["name"]].intersection(type_hashes[_ms["name"]])
+            if inter not in (set(), type_hashes[ms["name"]], type_hashes[_ms["name"]]):
+                ms["simple"] = False
+        
+    with savedir.joinpath(f"microstructures.json").open("w+") as fp:
+        json.dump(mdatas, fp, indent=2)
             
-            mdata = {
-                "name": f"microstructure_{i}",
-                "nodes": list(duplicated),
-                "size": dup_size,
-                "frequencies": freqs[dup_root_type],
-                "base_graph_path": str(base_graph_path.relative_to(savedir)),
-                "correlations": correlations
-            }
 
-            mdatas.append(mdata)    
-            draw(
-                g, 
-                subgraph=duplicated[0],
-                with_labels=False, 
-                save=str(savedir.joinpath(f"microstructure_{i}.png")), 
-                close=True
-            )
+def get_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('path', help="Directory of workflow JSONs", type=pathlib.Path)
+    parser.add_argument("-v", "--verbose", action="store_true", help="print logs")
+    parser.add_argument("-o", "--out", type=pathlib.Path, help="print logs")
+    parser.add_argument("-c", "--combine", action="store_true", help="if true, run microstructure combining algorithm")
+    return parser
 
-        type_hashes = {
-            ms["name"]: {g.nodes[node]["type_hash"] for node in ms["nodes"][0]}
-            for ms in mdatas
-        }
-        for ms in mdatas:
-            ms["simple"] = True
-            for _ms in mdatas:
-
-                inter = type_hashes[ms["name"]].intersection(type_hashes[_ms["name"]])
-                if inter not in (set(), type_hashes[ms["name"]], type_hashes[_ms["name"]]):
-                    ms["simple"] = False
-            
-        with savedir.joinpath(f"microstructures.json").open("w+") as fp:
-            json.dump(mdatas, fp, indent=2)
+def main():
+    parser = get_parser()
+    args = parser.parse_args()
+    find_microstructures(args.path, args.out, args.verbose, args.combine)
 
 if __name__ == "__main__":
-    main(verbose=False)
+    main()
+    

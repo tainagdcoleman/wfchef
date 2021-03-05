@@ -10,6 +10,10 @@ setup(
         'stringcase'
     ],
     entry_points = {
-        'console_scripts': ['wfchef=wfchef.chef:main'],
+        'console_scripts': [
+            'wfchef-create-recipe=wfchef.chef:main',
+            'wfchef-find-microstructures=wfchef.find_microstructures:main',
+            'wfchef-duplicate=wfchef.duplicate:main',
+        ],
     }
 )

@@ -4,9 +4,11 @@ import pickle
 import networkx as nx
 from typing import Set
 from uuid import uuid4
-from .find_microstructures import draw
+from wfchef.find_microstructures import draw
 import random
 import argparse
+import pandas as pd 
+import math 
 
 this_dir = pathlib.Path(__file__).resolve().parent
 
@@ -29,11 +31,12 @@ def duplicate_nodes(graph: nx.DiGraph, nodes: Set[str]):
                 graph.add_edge(new_node, new_nodes[child])
             else:
                 graph.add_edge(new_node, child)
+    
 
-
-def duplicate(microstructure: pathlib.Path, base_graph: pathlib.Path, nodes: int, complex: bool = False) -> nx.DiGraph:
+def duplicate(microstructure: pathlib.Path, base_graph: pathlib.Path, nodes: int, save_dir = pathlib.Path, complex: bool = False) -> nx.DiGraph:
     microstructure = pathlib.Path(microstructure).resolve()
     base_graph = pathlib.Path(base_graph).resolve()
+    save_dir = pathlib.Path(save_dir).resolve()
 
     mdata = json.loads(microstructure.read_text())
     graph: nx.DiGraph = pickle.loads(base_graph.read_bytes())
@@ -47,10 +50,20 @@ def duplicate(microstructure: pathlib.Path, base_graph: pathlib.Path, nodes: int
         else:
             raise ValueError("Worflow has no microstructures")
 
-    i = 0
-    while len(graph.nodes) < nodes:
-        duplicate_nodes(graph, random.choice(mdata[i % len(mdata)]["nodes"]))
-        i += 1
+    for ms in mdata:
+        print(type(ms['frequencies']))
+        freqs = {int(k): int(v) for k, v in ms["frequencies"].items()}
+        if not nodes in freqs:
+            freqs[nodes] = None 
+
+        ser = pd.Series(freqs).sort_index().interpolate()
+        for _ in range(round(ser[nodes])):
+            duplicate_nodes(graph, random.choice(ms["nodes"]))
+
+    graph_save = dict(nodes=str(graph.nodes()), edges=str(graph.edges()))
+    
+    with save_dir.open("w+") as fp:
+        json.dump(graph_save, fp, indent=2)
 
     return graph
 
@@ -81,8 +94,12 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
+ 
     path = this_dir.joinpath("microstructures", args.workflow)
-    graph = duplicate(path.joinpath("microstructures.json"), path.joinpath("base_graph.pickle"), args.size, args.complex)
+    graph = duplicate(path.joinpath("microstructures.json"), path.joinpath("base_graph.pickle"), args.size, path.joinpath("duplicated.json"), args.complex)
+    
+
+
     
     duplicated = {node for node in graph.nodes if "duplicate_of" in graph.nodes[node]}
     draw(graph, save=args.out, close=True, subgraph=duplicated)
