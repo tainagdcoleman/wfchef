@@ -11,8 +11,7 @@ from networkx.readwrite import read_gpickle, write_gpickle
 import numpy as np 
 from itertools import chain, combinations
 import argparse
-from .draw import draw
-from .utils import create_graph, string_hash, type_hash, combine_hashes, annotate
+from .utils import create_graph, string_hash, type_hash, combine_hashes, annotate, draw
 
 
 def find_microstructure(graph: nx.DiGraph, node: str, sibling: str, ms = None):
