@@ -39,7 +39,11 @@ def get_frequencies(graphs: List[nx.DiGraph]) -> Tuple[Dict[str, List[int]], Dic
             types[graph.nodes[node]["type"]][i] += 1
     return types, size
 
-def find_microstructures(workflow_path: Union[pathlib.Path], savedir: pathlib.Path, verbose: bool = False, do_combine: bool = False):
+def find_microstructures(workflow_path: Union[pathlib.Path], 
+                         savedir: pathlib.Path, 
+                         verbose: bool = False, 
+                         do_combine: bool = False,
+                         img_type: str = "png"):
     if verbose:
         print(f"Working on {workflow_path}")
     graphs = []
@@ -70,7 +74,7 @@ def find_microstructures(workflow_path: Union[pathlib.Path], savedir: pathlib.Pa
 
     if verbose:
         print("Drawing base graph")
-    draw(g, with_labels=False, save=str(savedir.joinpath("base_graph.png")))
+    draw(g, with_labels=False, save=str(savedir.joinpath(f"base_graph.{img_type}")))
 
     if verbose:
         print("Finding microstructures")
@@ -156,7 +160,7 @@ def find_microstructures(workflow_path: Union[pathlib.Path], savedir: pathlib.Pa
             g, 
             subgraph=duplicated[0],
             with_labels=False, 
-            save=str(savedir.joinpath(f"microstructure_{i}.png")), 
+            save=str(savedir.joinpath(f"microstructure_{i}.{img_type}")), 
             close=True
         )
 
@@ -182,13 +186,14 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--verbose", action="store_true", help="print logs")
     parser.add_argument("-n", "--name", help="name for workflow")
     parser.add_argument("-c", "--combine", action="store_true", help="if true, run microstructure combining algorithm")
+    parser.add_argument("-t", "--image-type", default="png", help="output types for images. anything that matplotlib supports (png, jpg, pdf, etc.)")
     return parser
 
 def main():
     parser = get_parser()
     args = parser.parse_args()
     outpath = this_dir.joinpath("microstructures", args.name)
-    find_microstructures(args.path, outpath, args.verbose, args.combine)
+    find_microstructures(args.path, outpath, args.verbose, args.combine, args.image_type.lower())
 
 if __name__ == "__main__":
     main()
