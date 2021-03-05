@@ -8,12 +8,11 @@ from pprint import pprint
 import argparse
 import shutil
 from stringcase import camelcase, snakecase
-
 from logging import Logger
 
-thisdir = pathlib.Path(__file__).resolve().parent
+this_dir = pathlib.Path(__file__).resolve().parent
 
-skeleton_path = thisdir.joinpath("recipe_skeleton.py")
+skeleton_path = this_dir.joinpath("recipe_skeleton.py")
 
 def create_recipe(path: Union[str, pathlib.Path], dst: Union[str, pathlib.Path]) -> WorkflowRecipe:
     path = pathlib.Path(path).resolve(strict=True)
@@ -44,21 +43,26 @@ def create_recipe(path: Union[str, pathlib.Path], dst: Union[str, pathlib.Path])
     skeleton_str = skeleton_str.replace("def __init__(self,", args_str)
     skeleton_str = skeleton_str.replace("self._init_()", f"self._init_({','.join(init_args)})")
     
-    with thisdir.joinpath(dst.joinpath(snakecase(wf_name)).with_suffix(".py")).open("w+") as fp:
+    with this_dir.joinpath(dst.joinpath(snakecase(wf_name)).with_suffix(".py")).open("w+") as fp:
         fp.write(skeleton_str)
 
 def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('src')
-    parser.add_argument('dst')
-
+    parser.add_argument(
+        "-w", "--workflow", 
+        choices=[path.stem for path in this_dir.joinpath("microstructures").glob("*") if path.is_dir()],
+        required=True,
+        help="Workflow to duplicate"
+    )
     return parser
 
 def main():
 
     parser = get_parser()
     args = parser.parse_args()
-    create_recipe(args.src, args.dst)
+    src = this_dir.joinpath("microstructures", args.workflow)
+    dst = src.joinpath("recipe")
+    create_recipe(src, dst)
 
 
 if __name__ == "__main__":

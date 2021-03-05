@@ -14,6 +14,8 @@ import argparse
 from .utils import create_graph, string_hash, type_hash, combine_hashes, annotate, draw
 
 
+this_dir = pathlib.Path(__file__).resolve().parent
+
 def find_microstructure(graph: nx.DiGraph, node: str, sibling: str, ms = None):
     if ms is None:
         ms = set()
@@ -178,14 +180,15 @@ def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('path', help="Directory of workflow JSONs", type=pathlib.Path)
     parser.add_argument("-v", "--verbose", action="store_true", help="print logs")
-    parser.add_argument("-o", "--out", type=pathlib.Path, help="print logs")
+    parser.add_argument("-n", "--name", help="name for workflow")
     parser.add_argument("-c", "--combine", action="store_true", help="if true, run microstructure combining algorithm")
     return parser
 
 def main():
     parser = get_parser()
     args = parser.parse_args()
-    find_microstructures(args.path, args.out, args.verbose, args.combine)
+    outpath = this_dir.joinpath("microstructures", args.name)
+    find_microstructures(args.path, outpath, args.verbose, args.combine)
 
 if __name__ == "__main__":
     main()
