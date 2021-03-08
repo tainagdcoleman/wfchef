@@ -119,6 +119,9 @@ def draw(g: nx.DiGraph,
          show: bool = False,
          save: Optional[Union[pathlib.Path, str]] = None,
          close: bool = False,
+         legend: bool = False,
+         node_size: int = 1000,
+         linewidths: int = 5,
          subgraph: Set[str] = set()) -> Tuple[plt.Figure, plt.Axes]:
     fig: plt.Figure
     ax: plt.Axes
@@ -144,9 +147,11 @@ def draw(g: nx.DiGraph,
         for src, dst in g.edges
     ]
     cmap = cm.get_cmap('rainbow', len(type_set))
-    nx.draw(g, pos, node_color=node_color, edgecolors=edgecolors, edge_color=edge_color, linewidths=3, cmap=cmap, ax=ax, with_labels=with_labels)
+    nx.draw(g, pos, node_size=node_size, node_color=node_color, edgecolors=edgecolors, edge_color=edge_color, linewidths=linewidths, cmap=cmap, ax=ax, with_labels=with_labels)
     color_lines = [mpatches.Patch(color=cmap(types[t]), label= t) for t in type_set]
-    legend = ax.legend(handles = color_lines , loc='lower right')
+   
+    if legend:
+        legend = ax.legend(handles = color_lines , loc='lower right')
 
     # for handle in legend.legendHandles:
     #     handle.set_color(cmap(types[t]))

@@ -16,18 +16,21 @@ from .utils import create_graph, string_hash, type_hash, combine_hashes, annotat
 
 this_dir = pathlib.Path(__file__).resolve().parent
 
-def find_microstructure(graph: nx.DiGraph, node: str, sibling: str, ms = None):
+def find_microstructure(graph: nx.DiGraph, node: str, sibling: str, ms = None, ms_sibling = None):
     if ms is None:
-        ms = set()
+        ms, ms_sibling = set(), set()
     if node == sibling: 
-        return ms
+        return ms, ms_sibling
     ms.add(node)
+    ms_sibling.add(sibling)
     key = lambda node: graph.nodes[node]["type_hash"]
     childs1 = sorted([child for _, child in graph.out_edges(node)], key=key)
     childs2 = sorted([child for _, child in graph.out_edges(sibling)], key=key)
     for child1, child2 in zip(childs1, childs2):
-        ms.update(find_microstructure(graph, child1, child2, ms))
-    return ms
+        _ms, _ms_sibling = find_microstructure(graph, child1, child2, ms, ms_sibling)
+        ms.update(_ms)
+        ms_sibling.update(_ms_sibling)
+    return ms, ms_sibling
 
 def get_frequencies(graphs: List[nx.DiGraph]) -> Tuple[Dict[str, List[int]], Dict[int, int]]:
     types = {}
@@ -43,7 +46,9 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
                          savedir: pathlib.Path, 
                          verbose: bool = False, 
                          do_combine: bool = False,
-                         img_type: str = "png"):
+                         img_type: str = "png",
+                         highlight_all_instances: bool = False,
+                         include_trivial: bool = False):
     if verbose:
         print(f"Working on {workflow_path}")
     graphs = []
@@ -92,13 +97,14 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
             if verbose:
                 print(f"RUNNING {s1}/{s2}")
             _g = g.copy()
-            duplicated = find_microstructure(_g, s1, s2)
+            duplicated, s2_duplicated = find_microstructure(_g, s1, s2)
             ms_hash = combine_hashes(*[_g.nodes[n]["type_hash"] for n in duplicated])
             for node in duplicated:
                 g.nodes[node]["microstructures"].add(ms_hash)
             ms_size = len(duplicated)
             microstructures.setdefault(ms_hash, (ms_size, _g.nodes[s1]["type"], []))
             microstructures[ms_hash][2].append(set(duplicated)) 
+            microstructures[ms_hash][2].append(set(s2_duplicated)) 
     
         queue.extend(children) 
 
@@ -132,7 +138,7 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
         [
             (ms_size, ms_root_types, ms) for _, (ms_size, ms_root_types, ms) 
             in merged.items() 
-            if np.unique(get_freqs(ms_root_types)).size > 1 or len(get_freqs(ms_root_types)) == 1 # remove microstructures with no duplication
+            if include_trivial or np.unique(get_freqs(ms_root_types)).size > 1 or len(get_freqs(ms_root_types)) == 1 # remove microstructures with no duplication
         ], 
         key=lambda x: x[0]
     )
@@ -158,7 +164,7 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
         mdatas.append(mdata)   
         draw(
             g, 
-            subgraph=duplicated[0],
+            subgraph=duplicated[0] if not highlight_all_instances else set.union(*duplicated),
             with_labels=False, 
             save=str(savedir.joinpath(f"microstructure_{i}.{img_type}")), 
             close=True
@@ -187,13 +193,19 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("-n", "--name", help="name for workflow")
     parser.add_argument("-c", "--combine", action="store_true", help="if true, run microstructure combining algorithm")
     parser.add_argument("-t", "--image-type", default="png", help="output types for images. anything that matplotlib supports (png, jpg, pdf, etc.)")
+    parser.add_argument("-l", "--highlight-all-instances", action="store_true", help="if set, highlights all instances of the microstructure")
+    parser.add_argument("-i", "--include-trivial", action="store_true", help="if set, trivial microstructures are not filtered out")
     return parser
 
 def main():
     parser = get_parser()
     args = parser.parse_args()
     outpath = this_dir.joinpath("microstructures", args.name)
-    find_microstructures(args.path, outpath, args.verbose, args.combine, args.image_type.lower())
+    find_microstructures(
+        args.path, outpath, args.verbose, args.combine, args.image_type.lower(),
+        highlight_all_instances=args.highlight_all_instances,
+        include_trivial=args.include_trivial
+    )
 
 if __name__ == "__main__":
     main()
