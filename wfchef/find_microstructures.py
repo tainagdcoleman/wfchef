@@ -48,6 +48,7 @@ def sort_graphs(workflow_path: Union[pathlib.Path],
     if verbose:
         print(f"Working on {workflow_path}")
     graphs = []
+
     for path in workflow_path.glob("*.json"):
         graph = create_graph(path)
         annotate(graph)
@@ -67,6 +68,7 @@ def sort_graphs(workflow_path: Union[pathlib.Path],
 
 def find_microstructures(workflow_path: Union[pathlib.Path], 
                          savedir: pathlib.Path, 
+                         base_graph: Optional[pathlib.Path],
                          verbose: bool = False, 
                          do_combine: bool = False,
                          img_type: str = "png",
@@ -75,8 +77,16 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
     
     
     sorted_graphs = sort_graphs(workflow_path, verbose)
-    g = sorted_graphs[0]  # smallest graph
-    g_macro = sorted_graphs[-1] #largest graph
+    
+    
+    if base_graph:
+        for graph in sorted_graphs:
+            if graph.name == base_graph.stem:
+                g = graph
+                
+    else:    
+        g = sorted_graphs[0]  # smallest graph
+
     freqs, sizes = get_frequencies(sorted_graphs)
     get_freqs = lambda root_type_hashes: np.min([freqs[root_type_hash] for root_type_hash in root_type_hashes], axis=0).tolist()
     nx.set_node_attributes(g, {node: set() for node in g.nodes}, name="microstructures")
@@ -207,6 +217,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument('path', help="Directory of workflow JSONs", type=pathlib.Path)
     parser.add_argument("-v", "--verbose", action="store_true", help="print logs")
     parser.add_argument("-n", "--name", help="name for workflow")
+    parser.add_argument("-b", "--base-graph", help="path to the json file for a base-graph", type=pathlib.Path)
     parser.add_argument("-c", "--combine", action="store_true", help="if true, run microstructure combining algorithm")
     parser.add_argument("-t", "--image-type", default="png", help="output types for images. anything that matplotlib supports (png, jpg, pdf, etc.)")
     parser.add_argument("-l", "--highlight-all-instances", action="store_true", help="if set, highlights all instances of the microstructure")
@@ -218,7 +229,7 @@ def main():
     args = parser.parse_args()
     outpath = this_dir.joinpath("microstructures", args.name)
     find_microstructures(
-        args.path, outpath, args.verbose, args.combine, args.image_type.lower(),
+        args.path, outpath, args.base_graph, args.verbose, args.combine, args.image_type.lower(),
         highlight_all_instances=args.highlight_all_instances,
         include_trivial=args.include_trivial
     )
