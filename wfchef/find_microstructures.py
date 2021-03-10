@@ -33,14 +33,14 @@ def find_microstructure(graph: nx.DiGraph, node: str, sibling: str, ms = None, m
     return ms, ms_sibling
 
 def get_frequencies(graphs: List[nx.DiGraph]) -> Tuple[Dict[str, List[int]], Dict[int, int]]:
-    types = {}
+    type_hashes = {}
     size = {}
     for i, graph in enumerate(graphs):
         size[i] = graph.order()
         for node in graph.nodes:
-            types.setdefault(graph.nodes[node]["type"], [0]*len(graphs))
-            types[graph.nodes[node]["type"]][i] += 1
-    return types, size
+            type_hashes.setdefault(graph.nodes[node]["type_hash"] , [0]*len(graphs))
+            type_hashes[graph.nodes[node]["type_hash"]][i] += 1
+    return type_hashes, size
 
 def find_microstructures(workflow_path: Union[pathlib.Path], 
                          savedir: pathlib.Path, 
@@ -67,7 +67,7 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
     sorted_graphs = sorted(graphs, key=lambda graph: len(graph.nodes))
     g = sorted_graphs[0]  # smallest graph
     freqs, sizes = get_frequencies(sorted_graphs)
-    get_freqs = lambda root_types: np.min([freqs[root_type] for root_type in root_types], axis=0).tolist()
+    get_freqs = lambda root_type_hashes: np.min([freqs[root_type_hash] for root_type_hash in root_type_hashes], axis=0).tolist()
     nx.set_node_attributes(g, {node: set() for node in g.nodes}, name="microstructures")
 
     savedir = pathlib.Path(savedir)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
@@ -102,7 +102,7 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
             for node in duplicated:
                 g.nodes[node]["microstructures"].add(ms_hash)
             ms_size = len(duplicated)
-            microstructures.setdefault(ms_hash, (ms_size, _g.nodes[s1]["type"], []))
+            microstructures.setdefault(ms_hash, (ms_size, _g.nodes[s1]["type_hash"], []))
             microstructures[ms_hash][2].append(set(duplicated)) 
             microstructures[ms_hash][2].append(set(s2_duplicated)) 
     
@@ -110,7 +110,7 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
 
     if do_combine:
         merged = {}
-        for ms_hash, (ms_size, root_type, node_sets) in microstructures.items():
+        for ms_hash, (ms_size, root_type_hash, node_sets) in microstructures.items():
             idxs = []
             for merged_hash, (_, _, _node_sets) in merged.items():
                 ms_nodes = frozenset(chain(*node_sets))
@@ -120,43 +120,44 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
                     idxs.append(merged_hash) # at least one node in common
             
             if not idxs:
-                merged[ms_hash] = (ms_size, {root_type}, node_sets)
+                merged[ms_hash] = (ms_size, {root_type_hash}, node_sets)
             else:
                 new_nodes = []
                 for all_nodes in product(node_sets, *[merged[merged_hash][2] for merged_hash in idxs]): # product between all 
                     if all([len(n1.intersection(n2)) > 0 for n1, n2 in combinations(all_nodes, r=2)]):
                         new_nodes.append(set.union(*all_nodes))
 
-                root_types = {root_type, *chain(*[merged[merged_hash][1] for merged_hash in idxs])}
-                merged[combine_hashes(ms_hash, merged_hash)] = (len(new_nodes[0]), root_types, new_nodes)
+                root_type_hashes = {root_type_hash, *chain(*[merged[merged_hash][1] for merged_hash in idxs])}
+                merged[combine_hashes(ms_hash, merged_hash)] = (len(new_nodes[0]), root_type_hashes, new_nodes)
                 for merged_hash in idxs:
                     del merged[merged_hash]
     else:
-        merged = {ms_hash: (ms_size, {root_type}, node_sets) for ms_hash, (ms_size, root_type, node_sets) in microstructures.items()}
+        merged = {ms_hash: (ms_size, {root_type_hash}, node_sets) for ms_hash, (ms_size, root_type_hash, node_sets) in microstructures.items()}
     
     sorted_microstructures = sorted(
         [
-            (ms_size, ms_root_types, ms) for _, (ms_size, ms_root_types, ms) 
+            (ms_size, ms_root_type_hashes, ms) for _, (ms_size, ms_root_type_hashes, ms) 
             in merged.items() 
-            if include_trivial or np.unique(get_freqs(ms_root_types)).size > 1 or len(get_freqs(ms_root_types)) == 1 # remove microstructures with no duplication
+            if include_trivial or np.unique(get_freqs(ms_root_type_hashes)).size > 1 or len(get_freqs(ms_root_type_hashes)) == 1 # remove microstructures with no duplication
         ], 
         key=lambda x: x[0]
     )
 
     mdatas = []
-    for i, (ms_size, ms_root_types, duplicated) in enumerate(sorted_microstructures):
+    for i, (ms_size, ms_root_type_hashes, duplicated) in enumerate(sorted_microstructures):
         correlations = {}
         
         for j, (_, key, _) in enumerate(sorted_microstructures):
             if i == j:
                 continue
-            correlations[f"microstructure_{j}"] = np.corrcoef(get_freqs(ms_root_types), get_freqs(key))[0,1]
+            correlations[f"microstructure_{j}"] = np.corrcoef(get_freqs(ms_root_type_hashes), get_freqs(key))[0,1]
         
+        nodes = [list(n) for n in set(map(frozenset, duplicated))]
         mdata = {
             "name": f"microstructure_{i}",
-            "nodes": list(map(list, duplicated)),
+            "nodes": nodes,
             "size": ms_size,
-            "frequencies": dict(zip(sizes.values(), get_freqs(ms_root_types))),
+            "frequencies": dict(zip(sizes.values(), get_freqs(ms_root_type_hashes))),
             "base_graph_path": str(base_graph_path.relative_to(savedir)),
             "correlations": correlations
         }

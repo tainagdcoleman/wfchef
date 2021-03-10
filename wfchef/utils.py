@@ -41,10 +41,16 @@ def create_graph(path: pathlib.Path) -> nx.DiGraph:
         id_count = 0
         for job in content['workflow']['jobs']:
             #specific for epigenomics -- have to think about how to do it in general
-            if content['name'] == "genome-dax-0":
+            if "genome-dax" in content['name']:
+                _type = job['name'].split('_')[0]
+
                 if '_sequence' in job['name']:
-                    _type, _id = job['name'].split('_sequence')
+                    _, _id = job['name'].split('_sequence')
                     _id = _id.lstrip('_')
+                
+                # if '_sequence' in job['name']:
+                #     _type, _id = job['name'].split('_sequence') #maybe just get the type from the first term
+                #     _id = _id.lstrip('_')
                     if not _id:
                         _id = str(id_count)
                         id_count += 1
@@ -131,11 +137,11 @@ def draw(g: nx.DiGraph,
         fig = ax.get_figure()
 
     pos = nx.nx_agraph.pygraphviz_layout(g, prog='dot')
-    type_set = sorted({g.nodes[node]["type"] for node in g.nodes})
+    type_set = sorted({g.nodes[node]["type_hash"] for node in g.nodes})
     types = {
         t: i for i, t in enumerate(type_set)
     }
-    node_color = [types[g.nodes[node]["type"]] for node in g.nodes]
+    node_color = [types[g.nodes[node]["type_hash"]] for node in g.nodes]
     for node in g.nodes:
         if node in subgraph:
             g.nodes[node]["node_shape"] = "s"

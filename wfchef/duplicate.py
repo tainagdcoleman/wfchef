@@ -4,7 +4,7 @@ import pickle
 import networkx as nx
 from typing import Set, Optional
 from uuid import uuid4
-from wfchef.find_microstructures import draw
+from wfchef.find_microstructures import draw, get_frequencies
 import random
 import argparse
 import pandas as pd 
@@ -57,20 +57,19 @@ def duplicate(microstructure: pathlib.Path,
             raise ValueError("Worflow has no simple microstructures")
         else:
             raise ValueError("Worflow has no microstructures")
-
+     
     for ms in mdata:
         freqs = {int(k): int(v) for k, v in ms["frequencies"].items()}
         if not nodes in freqs:
             freqs[nodes] = None 
 
-        ser = pd.Series(freqs).sort_index().interpolate()
-        for _ in range(round(ser[nodes])):
+        ser = pd.Series(freqs).sort_index()
+        ser = ser.interpolate()
+
+        for _ in range(round(ser[nodes]) - len(ms["nodes"])):
             duplicate_nodes(graph, random.choice(ms["nodes"]))
     
-    if save_dir is not None:
-        graph_save = dict(nodes=str(graph.nodes()), edges=str(graph.edges()))
-        with save_dir.open("w+") as fp:
-            json.dump(graph_save, fp, indent=2)
+
 
     return graph
 
