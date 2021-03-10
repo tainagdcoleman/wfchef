@@ -126,7 +126,7 @@ def draw(g: nx.DiGraph,
          save: Optional[Union[pathlib.Path, str]] = None,
          close: bool = False,
          legend: bool = False,
-         node_size: int = 1000,
+         node_size: int = 500,
          linewidths: int = 5,
          subgraph: Set[str] = set()) -> Tuple[plt.Figure, plt.Axes]:
     fig: plt.Figure

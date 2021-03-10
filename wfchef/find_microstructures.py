@@ -42,13 +42,9 @@ def get_frequencies(graphs: List[nx.DiGraph]) -> Tuple[Dict[str, List[int]], Dic
             type_hashes[graph.nodes[node]["type_hash"]][i] += 1
     return type_hashes, size
 
-def find_microstructures(workflow_path: Union[pathlib.Path], 
-                         savedir: pathlib.Path, 
-                         verbose: bool = False, 
-                         do_combine: bool = False,
-                         img_type: str = "png",
-                         highlight_all_instances: bool = False,
-                         include_trivial: bool = False):
+def sort_graphs(workflow_path: Union[pathlib.Path],
+                verbose: bool = False):
+    
     if verbose:
         print(f"Working on {workflow_path}")
     graphs = []
@@ -63,9 +59,24 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
 
     if verbose:
         print("Constructed graphs")
-    
+
     sorted_graphs = sorted(graphs, key=lambda graph: len(graph.nodes))
+
+    
+    return sorted_graphs
+
+def find_microstructures(workflow_path: Union[pathlib.Path], 
+                         savedir: pathlib.Path, 
+                         verbose: bool = False, 
+                         do_combine: bool = False,
+                         img_type: str = "png",
+                         highlight_all_instances: bool = False,
+                         include_trivial: bool = False):
+    
+    
+    sorted_graphs = sort_graphs(workflow_path, verbose)
     g = sorted_graphs[0]  # smallest graph
+    g_macro = sorted_graphs[-1] #largest graph
     freqs, sizes = get_frequencies(sorted_graphs)
     get_freqs = lambda root_type_hashes: np.min([freqs[root_type_hash] for root_type_hash in root_type_hashes], axis=0).tolist()
     nx.set_node_attributes(g, {node: set() for node in g.nodes}, name="microstructures")
@@ -77,6 +88,7 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
     base_graph_path = savedir.joinpath("base_graph.pickle")
     write_gpickle(g, str(base_graph_path))
 
+
     if verbose:
         print("Drawing base graph")
     draw(g, with_labels=False, save=str(savedir.joinpath(f"base_graph.{img_type}")))
@@ -86,6 +98,7 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
     visited = set()
     queue = ["SRC"]
     microstructures = {}
+    macrostructure = {}
     while queue:
         node = queue.pop()
         visited.add(node)
@@ -185,7 +198,9 @@ def find_microstructures(workflow_path: Union[pathlib.Path],
         
     with savedir.joinpath(f"microstructures.json").open("w+") as fp:
         json.dump(mdatas, fp, indent=2)
-            
+
+
+
 
 def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
