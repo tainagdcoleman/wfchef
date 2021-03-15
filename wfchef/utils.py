@@ -19,6 +19,7 @@ import argparse
 import json
 from hashlib import sha256
 
+
 def string_hash(obj: Hashable) -> str:
     return sha256(str(obj).encode("utf-8")).hexdigest()
 
@@ -39,31 +40,19 @@ def create_graph(path: pathlib.Path) -> nx.DiGraph:
         graph.add_node("DST", label="DST", type="DST", id="DST")
 
         id_count = 0
+
         for job in content['workflow']['jobs']:
+
             #specific for epigenomics -- have to think about how to do it in general
             if "genome-dax" in content['name']:
-                _type = job['name'].split('_')[0]
-
-                if '_sequence' in job['name']:
-                    _, _id = job['name'].split('_sequence')
-                    _id = _id.lstrip('_')
-                
-                # if '_sequence' in job['name']:
-                #     _type, _id = job['name'].split('_sequence') #maybe just get the type from the first term
-                #     _id = _id.lstrip('_')
-                    if not _id:
-                        _id = str(id_count)
-                        id_count += 1
-                else:
-                    _type, _id = job['name'], str(id_count)
-                    id_count += 1
-
-                graph.add_node(job['name'], label=_type, type=_type, id=_id)
-                    
+                _type, *_ = job['name'].split('_')
+                graph.add_node(job['name'], label=_type, type=_type, id=str(id_count))
+                id_count += 1
             else:
                 _type, _id = job['name'].split('_ID')
                 graph.add_node(job['name'], label=_type, type=_type, id=_id)
-     
+
+    
         # for job in content['workflow']['jobs']:
             for parent in job['parents']:
                 graph.add_edge(parent, job['name'])
@@ -77,6 +66,7 @@ def create_graph(path: pathlib.Path) -> nx.DiGraph:
                 graph.add_edge("SRC", node)
             if graph.out_degree(node) <= 0:
                 graph.add_edge(node, "DST")
+        
         
         return graph
 
@@ -120,6 +110,7 @@ def annotate(g: nx.DiGraph) -> None:
         ])
 
 def draw(g: nx.DiGraph, 
+         extension: Optional[str] = 'png',
          with_labels: bool = False, 
          ax: Optional[plt.Axes] = None,
          show: bool = False,
@@ -136,6 +127,15 @@ def draw(g: nx.DiGraph,
     else:
         fig = ax.get_figure()
 
+    node_border_colors = {}
+    if isinstance(subgraph, dict):
+        for color, nodes in subgraph.items():
+            for node in nodes:
+                node_border_colors[node] = color 
+    else:
+        for node in subgraph:
+            node_border_colors[node] = "green"
+
     pos = nx.nx_agraph.pygraphviz_layout(g, prog='dot')
     type_set = sorted({g.nodes[node]["type_hash"] for node in g.nodes})
     types = {
@@ -147,9 +147,9 @@ def draw(g: nx.DiGraph,
             g.nodes[node]["node_shape"] = "s"
         else:
             g.nodes[node]["node_shape"] = "c"
-    edgecolors = [("green" if node in subgraph else "white") for node in g.nodes]
+    edgecolors = [node_border_colors.get(node, "white") for node in g.nodes]
     edge_color = [
-        "green" if src in subgraph and dst in subgraph else "black"
+        node_border_colors.get(src) if node_border_colors.get(src,-1) == node_border_colors.get(dst, 1) else "black"
         for src, dst in g.edges
     ]
     cmap = cm.get_cmap('rainbow', len(type_set))
@@ -166,7 +166,10 @@ def draw(g: nx.DiGraph,
         plt.show()
 
     if save is not None:
-        fig.savefig(str(save))
+        if extension == 'dot':
+            nx.drawing.nx_agraph.write_dot(g, save)
+        else:
+            fig.savefig(str(save))
 
     if close:
         plt.close(fig)

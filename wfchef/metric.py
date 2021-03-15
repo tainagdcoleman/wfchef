@@ -1,18 +1,29 @@
 import networkx as nx
 from typing import Tuple, Optional, List
-from wfchef.utils import create_graph, annotate
+from wfchef.utils import create_graph, annotate, draw
 from wfchef.duplicate import duplicate
 import argparse
 import pathlib 
-import gmatch4py as gm
-
-
+import numpy as np
 
 this_dir = pathlib.Path(__file__).resolve().parent
 
+def compare_on(graph1: nx.DiGraph, graph2: nx.DiGraph, attr: str) -> float:
+    return next(nx.optimize_graph_edit_distance(
+            graph1, graph2, 
+            node_match=lambda x, y: x[attr] == y[attr], 
+            node_del_cost=lambda *x: 1.0, node_ins_cost=lambda *x: 1.0, 
+            edge_del_cost=lambda *x: 1.0, edge_ins_cost=lambda *x: 1.0
+        )
+    )
 
-def compare_distance(wf1: nx.DiGraph, wf2: nx.DiGraph) -> int:
-    return nx.graph_edit_distance(wf1, wf2)
+
+def compare(graph1: nx.DiGraph, graph2: nx.DiGraph):
+    v = compare_on(graph1, graph2, "type_hash")
+    i = compare_on(graph1, graph2, "id")
+    print(f"{v}/{i}")
+    return np.inf if i == 0 else v / i
+
 
 def get_parser()-> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -28,6 +39,7 @@ def get_parser()-> argparse.ArgumentParser:
         help="Workflow to duplicate"
     )
     
+    
     return parser
 
 
@@ -36,40 +48,31 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
+
     workflow = this_dir.joinpath("microstructures", args.workflow)
     
     
     wf_real = create_graph(args.path)
+    annotate(wf_real)
     print(f"Created real graph ({wf_real.order()} nodes)")
+
     wf_synth = duplicate(
         microstructure=workflow.joinpath("microstructures.json"),
         base_graph=workflow.joinpath("base_graph.pickle"),
         nodes=wf_real.order(),
-        save_dir=None,
         complex=False
     )
+
+    nx.write_gml(wf_real,  workflow.joinpath(f'real.gml'), stringizer=str)
+    nx.write_gml(wf_synth, workflow.joinpath(f'synth.gml'), stringizer=str)
+
+    draw(wf_synth, extension='png', save=this_dir.joinpath("synth.png"), close=True)
+
     print(f"Created synthetic graph with {wf_synth.order()} nodes")
-    annotate(wf_real)
-    print(f"Annotated real graph ")
-    annotate(wf_synth)
-    print(f"Annotated synthetic graph ")
-
-    # print("Comparison: ", compare_paths(wf_real, wf_synth))
-    # nodes_wf1 = wf1.nodes()
-    # nodes_wf2 = wf2.nodes()
 
 
-    dist = nx.graph_edit_distance(
-        wf_real, wf_synth, 
-        roots=("SRC", "SRC"),
-        node_match=lambda n1, n2: n1["type_hash"] == n2["type_hash"]
-    )
-    print(dist)
-
-    # ged=gm.GraphEditDistance(1,1,1,1) # all edit costs are equal to 1
-    # result=ged.compare([wf_real,wf_synth],None) 
-
-    # print(result)
+    print(compare(wf_real, wf_synth))
+    print(compare(wf_real, wf_real))
 
 
     
