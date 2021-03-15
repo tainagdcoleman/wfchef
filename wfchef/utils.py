@@ -29,7 +29,8 @@ def type_hash(_type: str, parent_types: Iterable[str]) -> str:
 def combine_hashes(*hashes: str) -> str:
     return string_hash(sorted(hashes))
 
-def create_graph(path: pathlib.Path) -> nx.DiGraph:
+def create_graph(path: Union[str, pathlib.Path]) -> nx.DiGraph:
+    path = pathlib.Path(path)
     with path.open() as fp:
         content = json.load(fp)
 

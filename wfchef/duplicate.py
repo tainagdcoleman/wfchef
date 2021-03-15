@@ -2,7 +2,7 @@ import pathlib
 import json
 import pickle 
 import networkx as nx
-from typing import Set, Optional, List
+from typing import Set, Optional, List, Union
 from uuid import uuid4
 from wfchef.find_microstructures import draw
 import random
@@ -10,6 +10,7 @@ import argparse
 import pandas as pd 
 import math 
 from itertools import chain
+from functools import partial
 
 this_dir = pathlib.Path(__file__).resolve().parent
 
@@ -35,6 +36,36 @@ def duplicate_nodes(graph: nx.DiGraph, nodes: Set[str]):
                 graph.add_edge(new_node, child)
     
     return new_nodes
+
+def duplicate(path: pathlib.Path, base: [str, pathlib.Path], num_nodes: int) -> nx.DiGraph:
+    summary = json.loads(path.joinpath("summary.json").read_text())
+    if base:
+        base_path = pathlib.Path(base)
+        if not base_path.is_absolute():
+            base_path = path.joinpath(base_path)
+    else:
+        base_path = path.joinpath(min(summary["base_graphs"].keys(), key=lambda k: summary["base_graphs"][k]["order"]))
+
+    graph = pickle.loads(base_path.joinpath("base_graph.pickle").read_bytes())
+    if num_nodes < graph.order():
+        raise ValueError(f"Cannot create synthentic graph with {num_nodes} nodes from base graph with {graph.order()} nodes")
+
+    microstructures = json.loads(base_path.joinpath("microstructures.json").read_text())
+
+    # ops = []
+    for ms_hash, ms in sorted(microstructures.items(), key=lambda x: summary["frequencies"][x[0]], reverse=True):
+        idx, values = zip(*summary["frequencies"][ms_hash])
+        freq = interpolate(idx, values, num_nodes)
+
+        for _ in range(int(freq) - ms["frequency"]):
+            # ops.append(partial(duplicate_nodes, graph, random.choice(ms["nodes"])))
+            duplicate_nodes(graph, random.choice(ms["nodes"]))
+    
+    # random.shuffle(ops)
+    # for op in ops:
+    #     op()
+
+    return graph
 
 def get_parser():
     parser = argparse.ArgumentParser()
@@ -77,28 +108,8 @@ def main():
     args = parser.parse_args()
 
     path = this_dir.joinpath("microstructures", args.workflow)
-    summary = json.loads(path.joinpath("summary.json").read_text())
+    graph = duplicate(path, args.base, num_nodes=args.size)
 
-    if args.base:
-        base_path = pathlib.Path(args.base)
-        if not base_path.is_absolute():
-            base_path = path.joinpath(base_path)
-    else:
-        base_path = path.joinpath(min(summary["base_graphs"].keys(), key=lambda k: summary["base_graphs"][k]["order"]))
-
-    graph = pickle.loads(base_path.joinpath("base_graph.pickle").read_bytes())
-    if args.size < graph.order():
-        raise ValueError(f"Cannot create synthentic graph with {args.size} nodes from base graph with {graph.order()} nodes")
-
-    microstructures = json.loads(base_path.joinpath("microstructures.json").read_text())
-
-    for ms_hash, ms in microstructures.items():
-        idx, values = zip(*summary["frequencies"][ms_hash])
-        freq = interpolate(idx, values, args.size)
-
-        for _ in range(int(freq)):
-            duplicate_nodes(graph, random.choice(ms["nodes"]))
-    
     duplicated = {node for node in graph.nodes if "duplicate_of" in graph.nodes[node]}
     draw(graph, save=args.out, close=True, subgraph=duplicated)
 

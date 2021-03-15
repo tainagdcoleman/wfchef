@@ -5,6 +5,8 @@ from wfchef.duplicate import duplicate
 import argparse
 import pathlib 
 import numpy as np
+import json
+import pickle 
 
 this_dir = pathlib.Path(__file__).resolve().parent
 
@@ -28,17 +30,10 @@ def compare(graph1: nx.DiGraph, graph2: nx.DiGraph):
 def get_parser()-> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'path', 
-        help="Path to the real Workflow (json) to compare against", 
-        type=pathlib.Path
-    )
-    parser.add_argument(
-        "-w", "--workflow", 
+        "workflow", 
         choices=[path.stem for path in this_dir.joinpath("microstructures").glob("*") if path.is_dir()],
-        required=True,
         help="Workflow to duplicate"
     )
-    
     
     return parser
 
@@ -48,31 +43,27 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-
     workflow = this_dir.joinpath("microstructures", args.workflow)
-    
-    
-    wf_real = create_graph(args.path)
-    annotate(wf_real)
-    print(f"Created real graph ({wf_real.order()} nodes)")
+    summary = json.loads(workflow.joinpath("summary.json").read_text())
+    sorted_graphs = sorted([name for name, _ in summary["base_graphs"].items()], key=lambda name: summary["base_graphs"][name]["order"])
 
-    wf_synth = duplicate(
-        microstructure=workflow.joinpath("microstructures.json"),
-        base_graph=workflow.joinpath("base_graph.pickle"),
-        nodes=wf_real.order(),
-        complex=False
-    )
+    for i, path in enumerate(sorted_graphs[1:], start=1):
+        print(f"TEST {i} ({path})")
+        path = workflow.joinpath(path)
+        for base in sorted_graphs[:i+1]:
+            wf_real = pickle.loads(path.joinpath("base_graph.pickle").read_bytes())
+            print(f"Created real graph ({wf_real.order()} nodes)")
 
-    nx.write_gml(wf_real,  workflow.joinpath(f'real.gml'), stringizer=str)
-    nx.write_gml(wf_synth, workflow.joinpath(f'synth.gml'), stringizer=str)
+            wf_synth = duplicate(
+                path=workflow,
+                base=base,
+                num_nodes=wf_real.order()
+            )
+            print(f"Created synthetic graph with {wf_synth.order()} nodes from {summary['base_graphs'][base]['order']}-node graph")
+            print(compare(wf_real, wf_synth))
+            print()
 
-    draw(wf_synth, extension='png', save=this_dir.joinpath("synth.png"), close=True)
-
-    print(f"Created synthetic graph with {wf_synth.order()} nodes")
-
-
-    print(compare(wf_real, wf_synth))
-    print(compare(wf_real, wf_real))
+            # draw(wf_synth, extension='png', save=this_dir.joinpath("synth.png"), close=True)
 
 
     
