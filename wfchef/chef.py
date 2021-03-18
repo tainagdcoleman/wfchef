@@ -20,28 +20,33 @@ def create_recipe(path: Union[str, pathlib.Path], dst: Union[str, pathlib.Path])
     dst.mkdir(exist_ok=True, parents=True)
 
     wf_name = f"Workflow{camelcase(path.stem)}"
-    microstructures = json.loads(path.joinpath("microstructures.json").read_text())
+    # microstructures = json.loads(path.joinpath("microstructures.json").read_text())
     
-    shutil.copy(path.joinpath("base_graph.pickle"), dst.joinpath("base_graph.pickle"))
-    shutil.copy(path.joinpath("microstructures.json"), dst.joinpath("microstructures.json"))
+    summary_path = dst.joinpath("microstructures", "summary.json")
+    summary_path.parent.mkdir(exist_ok=True, parents=True)
+    shutil.copy(path.joinpath("summary.json"), summary_path)
+    for filename in ["base_graph.pickle", "microstructures.json"]:
+        for p in path.glob(f"*/{filename}"):
+            dst_path = dst.joinpath("microstructures", p.parent.stem, filename)
+            dst_path.parent.mkdir(exist_ok=True, parents=True)
+            shutil.copy(p, dst_path)
 
     with skeleton_path.open() as fp:
         skeleton_str = fp.read() 
     
-    args = ["def __init__(self,"]
-    init_args = []
-    indent_size = 17
-    for microstructure in microstructures:
-        name = microstructure["name"]
-        indent = " "*indent_size
-        args.append(f"{indent}{name}: int = 0,")
-        init_args.append(f"{name}={name}")
+    # args = ["def __init__(self,"]
+    # init_args = []
+    # indent_size = 17
+    # for microstructure in microstructures:
+    #     name = microstructure["name"]
+    #     indent = " "*indent_size
+    #     args.append(f"{indent}{name}: int = 0,")
+    #     init_args.append(f"{name}={name}")
 
-    args_str = "\n".join(args)
+    # args_str = "\n".join(args)
     skeleton_str = skeleton_str.replace("Skeleton", wf_name)
-    skeleton_str = skeleton_str.replace("SkeletonRecipe", wf_name + "Recipe")
-    skeleton_str = skeleton_str.replace("def __init__(self,", args_str)
-    skeleton_str = skeleton_str.replace("self._init_()", f"self._init_({','.join(init_args)})")
+    # skeleton_str = skeleton_str.replace("def __init__(self,", args_str)
+    # skeleton_str = skeleton_str.replace("self._init_()", f"self._init_({','.join(init_args)})")
     
     with this_dir.joinpath(dst.joinpath(snakecase(wf_name)).with_suffix(".py")).open("w+") as fp:
         fp.write(skeleton_str)

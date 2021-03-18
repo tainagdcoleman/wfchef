@@ -12,8 +12,12 @@ import numpy as np
 from itertools import chain, combinations
 import argparse
 from .utils import create_graph, string_hash, type_hash, combine_hashes, annotate, draw
+import math 
 
 this_dir = pathlib.Path(__file__).resolve().parent
+
+def comb(n: int, k: int) -> int:
+    return math.factorial(n) / (math.factorial(k) * math.factorial(n - k))
 
 class ImbalancedMicrostructureError(Exception):
     pass 
@@ -56,18 +60,26 @@ def find_microstructure(graph: nx.DiGraph, n1: str, n2: str):
     return n1_friends, n2_friends, common_friends, all_friends
 
 def find_microstructures(graph: nx.DiGraph, verbose: bool = False):
+    if verbose:
+        print("Sorting nodes by type hash and parent")
     nodes_by_type_hash: Dict[str, Set[str]] = {}
     for node in graph.nodes:
         for child in get_children(graph, node):
             th = graph.nodes[child]["type_hash"]
             nodes_by_type_hash.setdefault((node, th), set())
             nodes_by_type_hash[(node, th)].add(child)
-    
+
+    if verbose:
+        print("Finding microstructures for typehashes")
     microstructures = {}
     for (th, _), nodes in nodes_by_type_hash.items():
+        if len(nodes) < 2:
+            continue
+        if verbose:
+            print(f"{th:5}: {len(nodes)} siblings ({comb(len(nodes), 2)} combos)")
         for n1, n2 in combinations(nodes, r=2):
             try:
-                ms1, ms2, edges, _ = find_microstructure(graph, n1, n2)
+                ms1, ms2, _, _ = find_microstructure(graph, n1, n2)
                 if len(ms1) > len(ms2):
                     ms1, ms2 = ms2, ms1
                     n1, n2 = n2, n1
@@ -105,12 +117,18 @@ def save_microstructures(workflow_path: Union[pathlib.Path],
                          savedir: pathlib.Path, 
                          verbose: bool = False, 
                          img_type: Optional[str] = None,
+                         cutoff: int = 4000,
                          highlight_all_instances: bool = False):
     summary = {
         "frequencies": {},
         "base_graphs": {}
     }
+
     for graph in sort_graphs(workflow_path, verbose):
+        if graph.order() > cutoff:
+            print(f'This and the next workflows have more than {cutoff} tasks')
+            break
+    
         if verbose:
             print(f"Running for {graph.name}")
         g_savedir = savedir.joinpath(graph.name)
@@ -154,28 +172,33 @@ def save_microstructures(workflow_path: Union[pathlib.Path],
                     save=str(g_savedir.joinpath(ms_name).with_suffix(f".{img_type}")), 
                     close=True
                 )
+            
+        if verbose:
+            print()
                 
         g_savedir.joinpath("microstructures").with_suffix(".json").write_text(json.dumps(mdatas, indent=2)) 
 
     savedir.joinpath("summary").with_suffix(".json").write_text(json.dumps(summary, indent=2)) 
         
-
-
 def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('path', help="Directory of workflow JSONs", type=pathlib.Path)
     parser.add_argument("-v", "--verbose", action="store_true", help="print logs")
     parser.add_argument("-n", "--name", help="name for workflow")
     parser.add_argument("-d", "--draw", default=None, help="output types for images. anything that matplotlib supports (png, jpg, pdf, etc.). Default is None.")
+    parser.add_argument("-c", "--cutoff", default=4000, help="max order of workflow")
     parser.add_argument("-l", "--highlight-all-instances", action="store_true", help="if set, highlights all instances of the microstructure")
+    
+
     return parser
 
 def main():
     parser = get_parser()
     args = parser.parse_args()
     outpath = this_dir.joinpath("microstructures", args.name)
+    
     save_microstructures(
-        args.path, outpath, args.verbose, args.draw,
+        args.path, outpath, args.verbose, args.draw, args.cutoff,
         highlight_all_instances=args.highlight_all_instances
     )
 

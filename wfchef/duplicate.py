@@ -52,18 +52,24 @@ def duplicate(path: pathlib.Path, base: [str, pathlib.Path], num_nodes: int) -> 
 
     microstructures = json.loads(base_path.joinpath("microstructures.json").read_text())
 
-    # ops = []
+    ops = []
     for ms_hash, ms in sorted(microstructures.items(), key=lambda x: summary["frequencies"][x[0]], reverse=True):
+        
         idx, values = zip(*summary["frequencies"][ms_hash])
         freq = interpolate(idx, values, num_nodes)
-
+        
         for _ in range(int(freq) - ms["frequency"]):
-            # ops.append(partial(duplicate_nodes, graph, random.choice(ms["nodes"])))
-            duplicate_nodes(graph, random.choice(ms["nodes"]))
+            ops.append(partial(duplicate_nodes, graph, random.choice(ms["nodes"])))
+            # ms["nodes"].append(
+            #     new_node for _, new_node
+            #     in duplicate_nodes(graph, random.choice(ms["nodes"])).items()
+            # )
     
-    # random.shuffle(ops)
-    # for op in ops:
-    #     op()
+    random.shuffle(ops)
+    for op in ops:
+        op()
+        if graph.order() >= num_nodes:
+            break
 
     return graph
 
@@ -100,6 +106,7 @@ def interpolate(xs: List[float], ys: List[float], x: float) -> float:
         xs = [*xs, x]
         ys = [*ys, None]
     ser = pd.Series(ys, index=xs).sort_index()
+    ser = ser[~ser.index.duplicated(keep='last')]
     ser = ser.interpolate("linear")
     return ser[x]
 

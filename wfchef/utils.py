@@ -1,14 +1,3 @@
-# To install dependencies, run:
-#   pip install networkx matplotlib
-# 
-# Then to see all options for the script, run:
-#   python wfdraw.py --help
-# 
-# Examples:
-#   python wfdraw.py /path/to/workflow.json -o ./workflow.png
-#   python wfdraw.py /path/to/workflow.json --show --labels
-
-
 import networkx as nx
 import pathlib
 import matplotlib.pyplot as plt

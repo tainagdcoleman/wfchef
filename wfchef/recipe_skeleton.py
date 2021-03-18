@@ -15,7 +15,7 @@ from workflowhub.common.file import FileLink
 from workflowhub.common.task import Task
 from workflowhub.common.workflow import Workflow
 
-from wfchef.duplicate import duplicate_nodes
+from wfchef.duplicate import duplicate_nodes, duplicate
 
 from itertools import product
 import pathlib 
@@ -41,18 +41,12 @@ class SkeletonRecipe(WorkflowRecipe):
     """
 
     def __init__(self,
+                 graph: nx.DiGraph,
                  data_footprint: Optional[int] = 0,
                  num_tasks: Optional[int] = 3,
                  **kwargs) -> None:
         super().__init__("Skeleton", data_footprint, num_tasks)
-        self._initialize(**kwargs)
-
-    def _initialize(self, **kwargs) -> None:
-        self.tasks = {}
-        self.variables = kwargs
-
-        self.graph = self._load_base_graph()
-        self.microstructures = self._load_microstructures()
+        self.graph = graph
         self.node_types = [
             self.graph.nodes[node]["type"]
             for node in self.graph.nodes
@@ -71,19 +65,15 @@ class SkeletonRecipe(WorkflowRecipe):
                  to the total number of tasks provided.
         :rtype: SkeletonRecipe
         """
-        microstructures = json.loads(this_dir.joinpath("microstructures.json").read_text())        
-        kwargs = {}
-        for ms in microstructures:
-            if not ms["simple"]: 
-                continue
+        summary_path = this_dir.joinpath("microstructures", "summary.json")
+        summary = json.loads(summary_path.read_text())
+        base_graph_name, base_graph_order = None, None
+        for name, details in summary["base_graphs"].items():
+            if details["order"] <= num_tasks and (base_graph_order is None or base_graph_order < details["order"]):
+                base_graph_name, base_graph_order = name, details["order"]
 
-            freqs = {int(k): int(v) for k, v in ms["frequencies"].items()}
-            if not num_tasks in freqs:
-                freqs[num_tasks] = None 
-
-            kwargs[ms["name"]] = round(pd.Series(freqs).sort_index().interpolate()[num_tasks])
-
-        return cls(**kwargs)
+        graph = duplicate(this_dir.joinpath("microstructures"), base_graph_name, num_tasks)
+        return SkeletonRecipe(graph=graph, num_tasks=num_tasks)
 
     def _load_base_graph(self) -> nx.DiGraph:
         return pickle.loads(this_dir.joinpath("base_graph.pickle").read_bytes())
@@ -102,12 +92,6 @@ class SkeletonRecipe(WorkflowRecipe):
         """
         workflow = Workflow(name=self.name + "-synthetic-trace" if not workflow_name else workflow_name, makespan=None)
         graph = self.graph.copy()
-
-        # Duplicate
-        for microstructure in self.microstructures: 
-            duplicity = self.variables[microstructure["name"]]
-            for _ in range(duplicity):
-                duplicate_nodes(graph, random.choice(microstructure["nodes"]))
 
         task_names = {}
         for node in graph.nodes:
