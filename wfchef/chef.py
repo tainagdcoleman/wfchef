@@ -9,18 +9,17 @@ import argparse
 import shutil
 from stringcase import camelcase, snakecase
 from logging import Logger
+import subprocess
 
 this_dir = pathlib.Path(__file__).resolve().parent
 
-skeleton_path = this_dir.joinpath("recipe_skeleton.py")
+skeleton_path = this_dir.joinpath("skeletons")
 
 def create_recipe(path: Union[str, pathlib.Path], dst: Union[str, pathlib.Path]) -> WorkflowRecipe:
     path = pathlib.Path(path).resolve(strict=True)
-    dst = pathlib.Path(dst).resolve()
-    dst.mkdir(exist_ok=True, parents=True)
-
     wf_name = f"Workflow{camelcase(path.stem)}"
-    # microstructures = json.loads(path.joinpath("microstructures.json").read_text())
+    dst = pathlib.Path(dst, snakecase(wf_name)).resolve()
+    dst.mkdir(exist_ok=True, parents=True)
     
     summary_path = dst.joinpath("microstructures", "summary.json")
     summary_path.parent.mkdir(exist_ok=True, parents=True)
@@ -31,24 +30,31 @@ def create_recipe(path: Union[str, pathlib.Path], dst: Union[str, pathlib.Path])
             dst_path.parent.mkdir(exist_ok=True, parents=True)
             shutil.copy(p, dst_path)
 
-    with skeleton_path.open() as fp:
+    # Recipe 
+    with skeleton_path.joinpath("recipe.py").open() as fp:
         skeleton_str = fp.read() 
-    
-    # args = ["def __init__(self,"]
-    # init_args = []
-    # indent_size = 17
-    # for microstructure in microstructures:
-    #     name = microstructure["name"]
-    #     indent = " "*indent_size
-    #     args.append(f"{indent}{name}: int = 0,")
-    #     init_args.append(f"{name}={name}")
 
-    # args_str = "\n".join(args)
     skeleton_str = skeleton_str.replace("Skeleton", wf_name)
-    # skeleton_str = skeleton_str.replace("def __init__(self,", args_str)
-    # skeleton_str = skeleton_str.replace("self._init_()", f"self._init_({','.join(init_args)})")
-    
-    with this_dir.joinpath(dst.joinpath(snakecase(wf_name)).with_suffix(".py")).open("w+") as fp:
+    skeleton_str = skeleton_str.replace("skeleton", snakecase(wf_name))
+    with this_dir.joinpath(dst.joinpath("__init__.py")).open("w+") as fp:
+        fp.write(skeleton_str)
+
+    # setup.py 
+    with skeleton_path.joinpath("setup.py").open() as fp:
+        skeleton_str = fp.read() 
+        
+    skeleton_str = skeleton_str.replace("Skeleton", wf_name)
+    skeleton_str = skeleton_str.replace("skeleton", snakecase(wf_name))
+    with this_dir.joinpath(dst.parent.joinpath("setup.py")).open("w+") as fp:
+        fp.write(skeleton_str)
+
+    # MANIFEST
+    with skeleton_path.joinpath("MANIFEST.in").open() as fp:
+        skeleton_str = fp.read() 
+        
+    skeleton_str = skeleton_str.replace("Skeleton", wf_name)
+    skeleton_str = skeleton_str.replace("skeleton", snakecase(wf_name))
+    with this_dir.joinpath(dst.parent.joinpath("MANIFEST.in")).open("w+") as fp:
         fp.write(skeleton_str)
 
 def get_parser() -> argparse.ArgumentParser:
@@ -68,6 +74,11 @@ def main():
     src = this_dir.joinpath("microstructures", args.workflow)
     dst = src.joinpath("recipe")
     create_recipe(src, dst)
+
+    print("Done! To install the package, run: \n")
+    print(f"  pip install {dst}")
+    print("\nor, in editable mode:\n")
+    print(f"  pip install -e {dst}")
 
 
 if __name__ == "__main__":

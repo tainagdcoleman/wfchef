@@ -24,7 +24,6 @@ import networkx as nx
 import random
 import json
 from uuid import uuid4
-import pandas as pd
 
 this_dir = pathlib.Path(__file__).resolve().parent
 
