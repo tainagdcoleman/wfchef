@@ -118,11 +118,13 @@ def save_microstructures(workflow_path: Union[pathlib.Path],
                          verbose: bool = False, 
                          img_type: Optional[str] = None,
                          cutoff: int = 4000,
-                         highlight_all_instances: bool = False):
+                         highlight_all_instances: bool = False
+                        ):
     summary = {
         "frequencies": {},
         "base_graphs": {}
     }
+    
 
     for graph in sort_graphs(workflow_path, verbose):
         if graph.order() > cutoff:
@@ -142,8 +144,8 @@ def save_microstructures(workflow_path: Union[pathlib.Path],
         }
 
         if img_type is not None:
+            base_graph_image_path = g_savedir.joinpath(f"base_graph.{img_type}")
             if verbose:
-                base_graph_image_path = g_savedir.joinpath(f"base_graph.{img_type}")
                 print(f"Drawing base graph to {base_graph_image_path}")
             draw(graph, close=True, legend=True, save=str(base_graph_image_path))
 
@@ -188,6 +190,8 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("-d", "--draw", default=None, help="output types for images. anything that matplotlib supports (png, jpg, pdf, etc.). Default is None.")
     parser.add_argument("-c", "--cutoff", default=4000, help="max order of workflow")
     parser.add_argument("-l", "--highlight-all-instances", action="store_true", help="if set, highlights all instances of the microstructure")
+ 
+
     
 
     return parser

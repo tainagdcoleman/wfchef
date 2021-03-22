@@ -4,15 +4,18 @@ import pickle
 import networkx as nx
 from typing import Set, Optional, List, Union
 from uuid import uuid4
+
+import numpy as np
 from wfchef.find_microstructures import draw
 import random
 import argparse
 import pandas as pd 
-import math 
-from itertools import chain
 from functools import partial
 
 this_dir = pathlib.Path(__file__).resolve().parent
+
+class NoMicrostructuresError(Exception):
+    pass 
 
 def duplicate_nodes(graph: nx.DiGraph, nodes: Set[str]):
     new_nodes = {}
@@ -37,7 +40,7 @@ def duplicate_nodes(graph: nx.DiGraph, nodes: Set[str]):
     
     return new_nodes
 
-def duplicate(path: pathlib.Path, base: [str, pathlib.Path], num_nodes: int) -> nx.DiGraph:
+def duplicate(path: pathlib.Path, base: Union[str, pathlib.Path], num_nodes: int, interpolate_limit: Union[int, float] = np.inf) -> nx.DiGraph:
     summary = json.loads(path.joinpath("summary.json").read_text())
     if base:
         base_path = pathlib.Path(base)
@@ -48,28 +51,27 @@ def duplicate(path: pathlib.Path, base: [str, pathlib.Path], num_nodes: int) -> 
 
     graph = pickle.loads(base_path.joinpath("base_graph.pickle").read_bytes())
     if num_nodes < graph.order():
-        raise ValueError(f"Cannot create synthentic graph with {num_nodes} nodes from base graph with {graph.order()} nodes")
+        raise ValueError(f"Cannot create synthentic graph with {num_nodes} nodes from base graph with {interpolate_limit} nodes")
 
     microstructures = json.loads(base_path.joinpath("microstructures.json").read_text())
 
-    ops = []
+    mss, freqs = [], []
     for ms_hash, ms in sorted(microstructures.items(), key=lambda x: summary["frequencies"][x[0]], reverse=True):
-        
-        idx, values = zip(*summary["frequencies"][ms_hash])
-        freq = interpolate(idx, values, num_nodes)
-        
-        for _ in range(int(freq) - ms["frequency"]):
-            ops.append(partial(duplicate_nodes, graph, random.choice(ms["nodes"])))
-            # ms["nodes"].append(
-            #     new_node for _, new_node
-            #     in duplicate_nodes(graph, random.choice(ms["nodes"])).items()
-            # )
+        if interpolate_limit:
+            idx, values = zip(*summary["frequencies"][ms_hash])
+        else:
+            try:
+                idx, values = zip(*[(order, f) for order, f in summary["frequencies"][ms_hash] if order <= graph.order()])
+            except ValueError:
+                raise NoMicrostructuresError
+
+        mss.append(ms)
+        freqs.append(int(interpolate(idx, values, num_nodes)))
     
-    random.shuffle(ops)
-    for op in ops:
-        op()
-        if graph.order() >= num_nodes:
-            break
+    p: np.ndarray = np.array(freqs) / np.sum(freqs)
+    while graph.order() < num_nodes:
+        ms = np.random.choice(mss, p=p)
+        duplicate_nodes(graph, random.choice(ms["nodes"]))
 
     return graph
 
