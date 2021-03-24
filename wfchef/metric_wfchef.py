@@ -53,7 +53,9 @@ def main():
     verbose = args.verbose
 
     workflow = this_dir.joinpath("microstructures", args.workflow)
-    results_path = workflow.joinpath("results_1.json")
+    metric_dir = workflow.joinpath('metric')
+    metric_dir.mkdir(parents=True, exist_ok=True)
+    results_path = metric_dir.joinpath("results.json")    
     summary = json.loads(workflow.joinpath("summary.json").read_text())
     sorted_graphs = sorted([name for name, _ in summary["base_graphs"].items()], key=lambda name: summary["base_graphs"][name]["order"])
 

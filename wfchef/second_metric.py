@@ -79,7 +79,7 @@ def get_parser()-> argparse.ArgumentParser:
         help="Workflow to duplicate",
         default=None
     )
-    parser.add_argument("--wf-commons", action="store_true", help="if set, the traces are from wfcommons")
+    parser.add_argument("--wf-hub", action="store_true", help="if set, the traces are from wfcommons")
     # parser.add_argument("-w", "--wfchef", action="store_true", help="if set, the traces are from wfchef")
 
     return parser
@@ -117,7 +117,7 @@ def main():
     if args.synth is not None:
 
         workflow: pathlib.Path = pathlib.Path(args.synth)
-        if args.wf_commons:
+        if args.wf_hub:
             for wf in workflow.glob("wfcommons*.json"):
                 graph = create_graph_wfcommons(wf)
                 annotate(graph)

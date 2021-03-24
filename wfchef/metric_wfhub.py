@@ -45,11 +45,6 @@ def compare_on(synth: nx.DiGraph, real: nx.DiGraph, attr: str) -> float:
 
 def compare(synth: nx.DiGraph, real: nx.DiGraph):
     approx_num_edits = compare_on(synth, real, "type")
-    print(synth.size())
-    print(real.size())
-    print(approx_num_edits)
-    print(f"{approx_num_edits}/{real.size()}")
-    print()
     return approx_num_edits / real.size()
 
 def get_parser()-> argparse.ArgumentParser:
@@ -69,7 +64,7 @@ def get_parser()-> argparse.ArgumentParser:
     parser.add_argument("--no-cache", action="store_true", help="if set, everything is recomputed from scratch")
 
     return parser
-
+   
 def main():
     parser = get_parser()
     args = parser.parse_args()
@@ -106,7 +101,9 @@ def main():
         real_graphs.append(graph)
 
     real_sorted_graphs = sorted(real_graphs, key=lambda graph: graph.order())
-    results_path = workflow.joinpath("results.json")
+    metric_dir = workflow.joinpath('metric')
+    metric_dir.mkdir(parents=True, exist_ok=True)
+    results_path = metric_dir.joinpath("results.json")
     labels = [f"{graph} ({graph.order()})" for graph in real_sorted_graphs]
     labels = [graph.order()for graph in real_sorted_graphs]
     rows = [[None for _ in range(len(real_sorted_graphs))]] # for _ in range(len(real_sorted_graphs))]

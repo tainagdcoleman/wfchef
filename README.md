@@ -11,10 +11,30 @@ pip install -e ./wfchef  # -e optional (for editable mode)
 
 First to find the microstructures and save them as jsons run this command:
 ```bash
-wfchef-find-microstructures path/to/montage/jsons -n montage -v
+wfchef-find-microstructures -v path/to/montage/jsons -n montage 
 ```
 
-Then to run the metric (which duplicates to evaluate) run the command:
+Then to run the metric for the wfchef instances (which duplicates to evaluate) run the command:
 ```bash
-wfchef-metric montage -v
+wfchef-metric -v montage 
+```
+Then to run the metric for the wfhub instances run the command:
+```bash
+wfhub-metric -v --real path/to/real/montage/jsons --synth path/to/synthetic/montage/jsons 
+```
+To run for the older generator use the flag "-o" in the previous command:
+```bash
+wfhub-metric -o -v --real path/to/real/montage/jsons --synth path/to/synthetic/montage/jsons 
+```
+To run the MSE metric for wfchef instances run the command:
+```bash
+wfchef-mse -v --real path/to/real/montage/jsons -w montage
+```
+To run MSE metric for wfhub instances run the command:
+```bash
+wfchef-mse -v --real path/to/real/montage/jsons --synth path/to/synthetic/montage/jsons --wf-hub
+```
+To run MSE metric for the old generator instances run the command:
+```bash
+wfchef-mse -v --real path/to/real/montage/jsons --synth path/to/synthetic/montage/jsons 
 ```
