@@ -75,8 +75,8 @@ def find_microstructures(graph: nx.DiGraph, verbose: bool = False):
     for (th, _), nodes in nodes_by_type_hash.items():
         if len(nodes) < 2:
             continue
-        if verbose:
-            print(f"{th:5}: {len(nodes)} siblings ({comb(len(nodes), 2)} combos)")
+        # if verbose:
+        #     print(f"{th:5}: {len(nodes)} siblings ({comb(len(nodes), 2)} combos)")
         for n1, n2 in combinations(nodes, r=2):
             try:
                 ms1, ms2, _, _ = find_microstructure(graph, n1, n2)
@@ -188,11 +188,8 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--verbose", action="store_true", help="print logs")
     parser.add_argument("-n", "--name", help="name for workflow")
     parser.add_argument("-d", "--draw", default=None, help="output types for images. anything that matplotlib supports (png, jpg, pdf, etc.). Default is None.")
-    parser.add_argument("-c", "--cutoff", default=4000, help="max order of workflow")
+    parser.add_argument("-c", "--cutoff", type=int, default=4000, help="max order of workflow")
     parser.add_argument("-l", "--highlight-all-instances", action="store_true", help="if set, highlights all instances of the microstructure")
- 
-
-    
 
     return parser
 
