@@ -8,8 +8,7 @@ pip install -e ./wfchef  # -e optional (for editable mode)
 ``` 
 
 ## Running 
-
-First to find the microstructures and save them as jsons run this command:
+If running wfchef for the first time, or if instances were added, to find the microstructures and save them as jsons run this command:
 ```bash
 wfchef-find-microstructures -v path/to/montage/jsons -n montage 
 ```
