@@ -13,11 +13,11 @@ If running wfchef for the first time, or if instances were added, to find the mi
 wfchef-find-microstructures -v path/to/montage/jsons -n montage 
 ```
 
-Then to run the metric for the wfchef instances (which duplicates to evaluate) run the command:
+To run the metric for the wfchef instances (which duplicates to evaluate) run the command:
 ```bash
 wfchef-metric -v montage 
 ```
-Then to run the metric for the wfhub instances run the command:
+To run the metric for the wfhub instances run the command:
 ```bash
 wfhub-metric -v --real path/to/real/montage/jsons --synth path/to/synthetic/montage/jsons 
 ```
