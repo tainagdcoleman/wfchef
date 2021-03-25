@@ -22,6 +22,8 @@ import pathlib
 import pickle
 import networkx as nx
 import random
+import numpy as np
+import pandas as pd
 import json
 from uuid import uuid4
 
@@ -66,12 +68,18 @@ class SkeletonRecipe(WorkflowRecipe):
         """
         summary_path = this_dir.joinpath("microstructures", "summary.json")
         summary = json.loads(summary_path.read_text())
-        base_graph_name, base_graph_order = None, None
-        for name, details in summary["base_graphs"].items():
-            if details["order"] <= num_tasks and (base_graph_order is None or base_graph_order < details["order"]):
-                base_graph_name, base_graph_order = name, details["order"]
 
-        graph = duplicate(this_dir.joinpath("microstructures"), base_graph_name, num_tasks)
+        metric_path = this_dir.joinpath("metric", "err.csv")
+        df = pd.read_csv(str(metric_path), index_col=0)
+        for col in df.columns:
+            df.loc[col, col] = np.nan
+
+        reference_orders = [summary["base_graphs"][col]["order"] for col in df.columns]
+        idx = np.argmin([abs(num_tasks - ref_num_tasks) for ref_num_tasks in reference_orders])
+        reference = df.columns[idx]
+
+        base = df.index[df[reference].argmin()]
+        graph = duplicate(this_dir.joinpath("microstructures"), base, num_tasks)
         return SkeletonRecipe(graph=graph, num_tasks=num_tasks)
 
     def _load_base_graph(self) -> nx.DiGraph:

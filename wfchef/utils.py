@@ -3,7 +3,7 @@ import pathlib
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import matplotlib.patches as mpatches
-from typing import Iterable, Union, Set, Optional, Tuple, Dict, Hashable, List
+from typing import Iterable, Type, Union, Set, Optional, Tuple, Dict, Hashable, List
 import argparse
 import json
 from hashlib import sha256
@@ -39,7 +39,10 @@ def create_graph(path: Union[str, pathlib.Path]) -> nx.DiGraph:
                 graph.add_node(job['name'], label=_type, type=_type, id=str(id_count))
                 id_count += 1
             else:
-                _type, _id = job['name'].split('_ID')
+                try:
+                    _type, _id = job['name'].split('_ID')
+                except ValueError:
+                    _type, _id = job['name'].split('_0')
                 graph.add_node(job['name'], label=_type, type=_type, id=_id)
 
     
