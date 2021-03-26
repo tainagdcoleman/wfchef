@@ -47,8 +47,8 @@ def get_parser()-> argparse.ArgumentParser:
         help="Path to synthetic workflows"
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="print logs")
-    parser.add_argument("--gen", action="store_true", help="if set, the traces are from generator")
-    parser.add_argument("--wfhub", action="store_true", help="if set, the traces are from wfhub")
+    # parser.add_argument("--gen", action="store_true", help="if set, the traces are from generator")
+    # parser.add_argument("--wfhub", action="store_true", help="if set, the traces are from wfhub")
 
     return parser
 

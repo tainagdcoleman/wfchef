@@ -8,31 +8,6 @@ import pandas as pd
 
 this_dir = pathlib.Path(__file__).resolve().parent
 
-def create_graph_wfcommons(path: Union[str, pathlib.Path]) -> nx.DiGraph:
-    path = pathlib.Path(path)
-    with path.open() as fp: 
-        content = json.load(fp)
-        graph = nx.DiGraph()
-        # Add src/dst nodes
-        graph.add_node("SRC", label="SRC", type="SRC", id="SRC")
-        graph.add_node("DST", label="DST", type="DST", id="DST")
-        id_count = 0
-        
-        for job in content['workflow']['jobs']:         
-            _type, _id = job['name'].split('_0')
-            graph.add_node(job['name'], label=_type, type=_type, id=_id)
-            
-            for parent in job['parents']:
-                graph.add_edge(parent, job['name'])
-
-        for node in graph.nodes:       
-            if node in ["SRC", "DST"]:
-                continue
-            if graph.in_degree(node) <= 0:              
-                graph.add_edge("SRC", node)
-            if graph.out_degree(node) <= 0:
-                graph.add_edge(node, "DST") 
-        return graph
 
 def compare_on(synth: nx.DiGraph, real: nx.DiGraph, attr: str) -> float:
     return next(nx.optimize_graph_edit_distance(
@@ -60,7 +35,6 @@ def get_parser()-> argparse.ArgumentParser:
         help="Path to synthetic workflows"
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="print logs")
-    parser.add_argument("-o", "--old", action="store_true", help="if set, the traces are from the old generator")
     parser.add_argument("--no-cache", action="store_true", help="if set, everything is recomputed from scratch")
 
     return parser
@@ -70,24 +44,18 @@ def main():
     args = parser.parse_args()
     verbose = args.verbose
     
+
+    graphs = []
+    results = {}
+
     #Workflows to evaluate
-    if args.old:
-        workflow: pathlib.Path = args.synth 
-        graphs = []
-        for wf in workflow.glob("old*.json"):
-            graph = create_graph(wf)
-            annotate(graph)
-            graph.graph["name"] = wf.stem
-            graphs.append(graph) 
-    else:
-        workflow: pathlib.Path = args.synth 
-        graphs = []
-        for wf in workflow.glob("wfcommons*.json"):
-            graph = create_graph_wfcommons(wf)
-            annotate(graph)
-            graph.graph["name"] = wf.stem
-            graphs.append(graph)
-    
+    workflow: pathlib.Path = pathlib.Path(args.synth)
+    wfs = [*workflow.glob("old*.json"), *workflow.glob("wfcommons*.json"), *workflow.glob("wfchef*.json")]
+    for wf in wfs:
+        graph = create_graph(wf)
+        annotate(graph)
+        graph.graph["name"] = wf.stem
+        graphs.append(graph) 
         
     synth_sorted_graphs = sorted(graphs, key=lambda graph: graph.order())
 

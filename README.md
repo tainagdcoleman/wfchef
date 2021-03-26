@@ -13,27 +13,15 @@ If running wfchef for the first time, or if instances were added, to find the mi
 wfchef-find-microstructures -v path/to/montage/jsons -n montage 
 ```
 
-To run the metric for the wfchef instances (which duplicates to evaluate) run the command:
+To run the metric for the wfchef if you do not have the traces yet (this will call duplicate to evaluate) run the command:
 ```bash
-wfchef-metric -v montage 
+wfchef-dist -v montage 
 ```
-To run the metric for the wfhub instances run the command:
+To run the metric for wfhub, generator and wfchef when the traces are already available run the command:
 ```bash
-wfhub-metric -v --real path/to/real/montage/jsons --synth path/to/synthetic/montage/jsons 
+wfchef-metric -v --real path/to/real/montage/jsons --synth path/to/synthetic/montage/jsons 
 ```
-To run for the older generator use the flag "-o" in the previous command:
+To run the RMSE metric for wfchef, wfhub and generator traces:
 ```bash
-wfhub-metric -o -v --real path/to/real/montage/jsons --synth path/to/synthetic/montage/jsons 
-```
-To run the MSE metric for wfchef instances run the command:
-```bash
-wfchef-mse -v --real path/to/real/montage/jsons -w montage
-```
-To run MSE metric for wfhub instances run the command:
-```bash
-wfchef-mse -v --real path/to/real/montage/jsons --synth path/to/synthetic/montage/jsons --wf-hub
-```
-To run MSE metric for the old generator instances run the command:
-```bash
-wfchef-mse -v --real path/to/real/montage/jsons --synth path/to/synthetic/montage/jsons 
+wfchef-rmse -v --real path/to/real/montage/jsons --synth path/to/synthetic/montage/jsons
 ```
