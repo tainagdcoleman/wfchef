@@ -102,6 +102,8 @@ class SkeletonRecipe(WorkflowRecipe):
 
         task_names = {}
         for node in graph.nodes:
+            if node in ["SRC", "DST"]:
+                continue
             node_type = graph.nodes[node]["type"]
             task_name = self._generate_task_name(node_type)
             task = self._generate_task(node_type, task_name)
@@ -110,8 +112,10 @@ class SkeletonRecipe(WorkflowRecipe):
             task_names[node] = task_name
 
         for (src, dst) in graph.edges:
+            if src in ["SRC", "DST"] or dst in ["SRC", "DST"]:
+                continue
             workflow.add_edge(task_names[src], task_names[dst])        
-
+        
         workflow.nxgraph = graph
         self.workflows.append(workflow)
         return workflow
