@@ -5,36 +5,10 @@ import json
 from typing import Union 
 from wfchef.utils import create_graph, annotate
 import pandas as pd 
-import math
 import numpy as np
-import pprint
+from wfchef.chef import compare_rmse
 
 this_dir = pathlib.Path(__file__).resolve().parent
-
-def compare(synth_graph: nx.DiGraph, real_graph: nx.DiGraph):
-    synthetic = {}
-    real = {}
-    
-    for node in synth_graph.nodes:
-        _type = synth_graph.nodes[node]['type_hash']
-        synthetic.setdefault(_type, 0)
-        synthetic[_type] +=1 
-
-    for node in real_graph.nodes:
-        _type = real_graph.nodes[node]['type_hash']
-        real.setdefault(_type, 0)
-        real[_type] +=1 
-    
-    _types = ({*synthetic.keys(), *real.keys()})
-    print(f'Order: {real_graph.order()}')
-    pprint.pprint({_type: [real.get(_type, 0), synthetic.get(_type, 0)] for _type in _types})
-
-    mse = math.sqrt(sum([
-        (real.get(_type, 0) - synthetic.get(_type, 0))**2
-        for _type in _types
-    ]) / len(_types))
-    return mse / real_graph.order()
-
      
 def get_parser()-> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -85,7 +59,7 @@ def main():
         graph.graph["name"] = wf.stem
         graphs.append(graph) 
 
-    pprint.pprint({graph.nodes[node]["type"] for graph in graphs for node in graph.nodes})
+    # pprint.pprint({graph.nodes[node]["type"] for graph in graphs for node in graph.nodes})
 
     real_workflows: pathlib.Path = args.real 
     real_graphs = []
@@ -110,7 +84,7 @@ def main():
     labels = [graph.order() for graph in real_sorted_graphs]
     rows = [[None for i in range(len(real_sorted_graphs))]]
     for i, (synth, real) in enumerate(pairs):
-        err = compare(real, synth)
+        err = compare_rmse(real, synth)
         results[real.order()] = err    
         rows[0][i] = err 
         save_results(workflow, results, labels, rows)
@@ -121,3 +95,6 @@ def main():
 if __name__=="__main__":
     main()
 
+
+
+#colors: "#F5BF5A", "#C62E5A", "#843555", #ebebeb
